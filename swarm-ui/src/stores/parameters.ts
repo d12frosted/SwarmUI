@@ -239,9 +239,13 @@ export const useParametersStore = create<ParametersState>()(
           input[param.id] = value;
         }
 
-        // Always include core params
-        if (values.prompt) input.prompt = values.prompt;
-        if (values.negativeprompt) input.negativeprompt = values.negativeprompt;
+        // Always include core params (these may not be in paramTypes from server)
+        const coreParams = ['prompt', 'negativeprompt', 'model', 'width', 'height', 'steps', 'cfgscale', 'seed', 'sampler', 'scheduler'];
+        for (const key of coreParams) {
+          if (values[key] !== undefined && values[key] !== null && values[key] !== '') {
+            input[key] = values[key];
+          }
+        }
 
         // Always include images (batch size) - must be at least 1
         input.images = Number(values.images) || 1;

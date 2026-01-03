@@ -4,10 +4,9 @@ import { useState } from "react";
 import { useSessionStore } from "@/stores/session";
 import { useStatusStore } from "@/stores/status";
 import { useParametersStore } from "@/stores/parameters";
-import { ParameterPanel } from "@/components/parameters";
+import { ParameterPanel, TextInput, ResolutionSelector } from "@/components/parameters";
 import { ModelSelector } from "@/components/models/ModelSelector";
 import { GenerateButton, ImageResult, BatchHistory } from "@/components/generation";
-import { TextInput } from "@/components/parameters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -101,6 +100,14 @@ export default function GeneratePage() {
 
                       {/* Model Selector */}
                       <ModelSelector />
+
+                      {/* Resolution Selector */}
+                      <ResolutionSelector
+                        width={Number(values.width) || 512}
+                        height={Number(values.height) || 512}
+                        onWidthChange={(w) => setValue("width", w)}
+                        onHeightChange={(h) => setValue("height", h)}
+                      />
 
                       {/* Generate Button */}
                       <div className="pt-2">

@@ -4,3 +4,4 @@ export { TextInput } from "./TextInput";
 export { DropdownInput } from "./DropdownInput";
 export { CheckboxInput } from "./CheckboxInput";
 export { ParameterPanel } from "./ParameterPanel";
+export { ResolutionSelector } from "./ResolutionSelector";

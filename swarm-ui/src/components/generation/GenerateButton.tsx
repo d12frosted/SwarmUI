@@ -1,15 +1,22 @@
 "use client";
 
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Toggle } from "@/components/ui/toggle";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useSessionStore } from "@/stores/session";
 import { useStatusStore } from "@/stores/status";
 import { useGenerationStore } from "@/stores/generation";
 import { useParametersStore } from "@/stores/parameters";
 import { WSClient } from "@/lib/websocket/client";
 import { interruptAll } from "@/lib/api";
-import { Play, Square, AlertCircle } from "lucide-react";
+import { Play, Square, AlertCircle, Infinity } from "lucide-react";
 import type { WSMessage, GeneratedImage, GenerationProgress, ImageMetadata } from "@/types/api";
 
 interface GenerateButtonProps {
@@ -23,6 +30,7 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
   const {
     isGenerating,
     currentRequest,
+    isGeneratingForever,
     startGeneration,
     updateProgress,
     setPreviewImage,
@@ -30,9 +38,16 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
     completeGeneration,
     failGeneration,
     cancelGeneration,
+    setGeneratingForever,
   } = useGenerationStore();
   const { getGenerationInput } = useParametersStore();
   const [lastError, setLastError] = useState<string | null>(null);
+  const generateForeverRef = useRef(false);
+
+  // Keep ref in sync with store
+  useEffect(() => {
+    generateForeverRef.current = isGeneratingForever;
+  }, [isGeneratingForever]);
 
   // Clear error after 10 seconds
   useEffect(() => {
@@ -148,6 +163,12 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
         if (state === "completed" || state === "disconnected") {
           if (useGenerationStore.getState().currentRequest?.id === requestId) {
             completeGeneration(requestId);
+            // If generate forever is enabled, start a new generation
+            if (generateForeverRef.current) {
+              setTimeout(() => {
+                handleGenerate();
+              }, 100);
+            }
           }
         }
       },
@@ -161,6 +182,7 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
         error instanceof Error ? error.message : "Failed to connect"
       );
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     sessionId,
     getGenerationInput,
@@ -192,33 +214,61 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
 
   return (
     <div className="flex flex-col gap-2">
-      {isGenerating ? (
-        <Button
-          variant="destructive"
-          size="lg"
-          className="w-full"
-          onClick={handleInterrupt}
-        >
-          <Square className="mr-2 h-4 w-4" />
-          Interrupt
-        </Button>
-      ) : (
-        <Button
-          size="lg"
-          className="w-full"
-          onClick={handleGenerate}
-          disabled={!sessionId || waitingGens > 10}
-        >
-          <Play className="mr-2 h-4 w-4" />
-          Generate
-        </Button>
-      )}
+      <div className="flex items-center gap-2">
+        {isGenerating ? (
+          <Button
+            variant="destructive"
+            size="lg"
+            className="flex-1"
+            onClick={handleInterrupt}
+          >
+            <Square className="mr-2 h-4 w-4" />
+            {isGeneratingForever ? "Stop Forever" : "Interrupt"}
+          </Button>
+        ) : (
+          <Button
+            size="lg"
+            className="flex-1"
+            onClick={handleGenerate}
+            disabled={!sessionId || waitingGens > 10}
+          >
+            <Play className="mr-2 h-4 w-4" />
+            Generate
+          </Button>
+        )}
+
+        {/* Generate Forever Toggle */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Toggle
+                pressed={isGeneratingForever}
+                onPressedChange={setGeneratingForever}
+                size="lg"
+                className="shrink-0"
+                aria-label="Generate forever"
+              >
+                <Infinity className="h-4 w-4" />
+              </Toggle>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Generate Forever: {isGeneratingForever ? "ON" : "OFF"}</p>
+              <p className="text-xs text-muted-foreground">
+                Continuously generate images until stopped
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
 
       {/* Progress indicator */}
       {isGenerating && (
         <div className="space-y-1">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">
+            <span className="text-muted-foreground flex items-center gap-1.5">
+              {isGeneratingForever && (
+                <Infinity className="h-3 w-3 text-primary animate-pulse" />
+              )}
               {progress?.batch_index !== undefined
                 ? `Image ${progress.batch_index + 1}`
                 : "Generating..."}

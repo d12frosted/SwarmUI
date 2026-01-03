@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { useParametersStore } from "@/stores/parameters";
 import { MainLayout } from "@/components/layout";
-import { ParameterPanel, TextInput, ResolutionSelector, SliderInput, NumberInput, DropdownInput } from "@/components/parameters";
+import { ParameterPanel, PromptInput, ResolutionSelector, SliderInput, NumberInput, DropdownInput } from "@/components/parameters";
 import { ModelSelector } from "@/components/models/ModelSelector";
 import { LoraManager } from "@/components/loras";
 import { QuickPresetSelector } from "@/components/presets";
-import { GenerateButton, ImageResult, BatchHistory } from "@/components/generation";
+import { GenerateButton, ImageResult, BatchHistory, BatchSizeSelector } from "@/components/generation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTokenCount } from "@/hooks";
@@ -53,20 +53,21 @@ export default function GeneratePage() {
                 <TabsContent value="main" className="flex-1 overflow-auto m-0">
                   <div className="flex flex-col p-3 space-y-4">
                       {/* Prompt */}
-                      <TextInput
+                      <PromptInput
                         id="prompt"
                         label="Prompt"
-                        description="Describe what you want to generate"
+                        description="Describe what you want to generate. Type < for syntax helpers."
                         value={String(values.prompt || "")}
                         onChange={(v) => setValue("prompt", v)}
                         placeholder="A beautiful sunset over mountains..."
                         rows={6}
                         showTokenCount
                         tokenCount={promptTokens}
+                        enableAutocomplete
                       />
 
                       {/* Negative Prompt */}
-                      <TextInput
+                      <PromptInput
                         id="negativeprompt"
                         label="Negative Prompt"
                         description="Describe what you want to avoid"
@@ -76,6 +77,7 @@ export default function GeneratePage() {
                         rows={3}
                         showTokenCount
                         tokenCount={negativePromptTokens}
+                        enableAutocomplete
                       />
 
                       {/* Model Selector */}
@@ -136,31 +138,25 @@ export default function GeneratePage() {
                         )}
                       </div>
 
-                      {/* Seed & Images - 2 column */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <NumberInput
-                          id="seed"
-                          label="Seed"
-                          value={Number(values.seed) ?? -1}
-                          onChange={(v) => setValue("seed", v)}
-                          min={-1}
-                          max={2147483647}
-                          showRandomize
-                          showReset
-                          defaultValue={-1}
-                          hideSpinButtons
-                        />
-                        <NumberInput
-                          id="images"
-                          label="Images"
-                          value={Number(values.images) || 1}
-                          onChange={(v) => setValue("images", v)}
-                          min={1}
-                          max={100}
-                          showReset
-                          defaultValue={1}
-                        />
-                      </div>
+                      {/* Seed */}
+                      <NumberInput
+                        id="seed"
+                        label="Seed"
+                        value={Number(values.seed) ?? -1}
+                        onChange={(v) => setValue("seed", v)}
+                        min={-1}
+                        max={2147483647}
+                        showRandomize
+                        showReset
+                        defaultValue={-1}
+                        hideSpinButtons
+                      />
+
+                      {/* Batch Size */}
+                      <BatchSizeSelector
+                        value={Number(values.images) || 1}
+                        onChange={(v) => setValue("images", v)}
+                      />
 
                       {/* Generate Button */}
                       <div className="pt-1">

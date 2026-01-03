@@ -1,6 +1,7 @@
 export { SliderInput } from "./SliderInput";
 export { NumberInput } from "./NumberInput";
 export { TextInput } from "./TextInput";
+export { PromptInput } from "./PromptInput";
 export { DropdownInput } from "./DropdownInput";
 export { CheckboxInput } from "./CheckboxInput";
 export { ImageInput } from "./ImageInput";

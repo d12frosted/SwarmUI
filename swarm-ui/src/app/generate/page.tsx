@@ -60,23 +60,23 @@ export default function GeneratePage() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <div className="container px-4 py-4">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-[calc(100vh-7rem)]">
-          {/* Left Panel - Parameters */}
-          <div className="lg:col-span-3 flex flex-col gap-4 overflow-hidden">
-            <Card className="flex-1 flex flex-col overflow-hidden">
-              <CardHeader className="py-3 px-4">
+      {/* Main Content - Fixed viewport height with independent scrolling columns */}
+      <div className="container px-4 py-4 h-[calc(100vh-3.5rem)] overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-full items-start">
+          {/* Left Panel - Parameters (fixed height, internal scroll) */}
+          <div className="lg:col-span-3 h-full max-h-full overflow-hidden">
+            <Card className="h-full flex flex-col">
+              <CardHeader className="py-3 px-4 shrink-0">
                 <CardTitle className="text-base">Parameters</CardTitle>
               </CardHeader>
               <CardContent className="flex-1 p-0 overflow-hidden">
                 <Tabs defaultValue="main" className="h-full flex flex-col">
-                  <TabsList className="mx-4 mb-2">
+                  <TabsList className="mx-4 mb-2 shrink-0">
                     <TabsTrigger value="main">Main</TabsTrigger>
                     <TabsTrigger value="all">All</TabsTrigger>
                   </TabsList>
-                  <TabsContent value="main" className="flex-1 overflow-hidden m-0">
-                    <div className="h-full flex flex-col px-4 pb-4 space-y-4">
+                  <TabsContent value="main" className="flex-1 overflow-auto m-0">
+                    <div className="flex flex-col px-4 pb-4 space-y-4">
                       {/* Prompt */}
                       <TextInput
                         id="prompt"
@@ -103,7 +103,7 @@ export default function GeneratePage() {
                       <ModelSelector />
 
                       {/* Generate Button */}
-                      <div className="mt-auto pt-2">
+                      <div className="pt-2">
                         <GenerateButton onImageGenerated={handleImageGenerated} />
                       </div>
                     </div>
@@ -116,19 +116,19 @@ export default function GeneratePage() {
             </Card>
           </div>
 
-          {/* Center Panel - Image Result */}
-          <div className="lg:col-span-6 flex flex-col gap-4">
-            <Card className="flex-1 flex flex-col overflow-hidden">
-              <CardHeader className="py-3 px-4">
+          {/* Center Panel - Image Result (fills remaining height) */}
+          <div className="lg:col-span-6 h-full max-h-full flex flex-col gap-4 overflow-hidden">
+            <Card className="flex-1 flex flex-col overflow-hidden min-h-0">
+              <CardHeader className="py-3 px-4 shrink-0">
                 <CardTitle className="text-base">Result</CardTitle>
               </CardHeader>
-              <CardContent className="flex-1 p-4 pt-0 overflow-hidden">
+              <CardContent className="flex-1 p-4 pt-0 overflow-hidden min-h-0">
                 <ImageResult className="h-full" />
               </CardContent>
             </Card>
 
             {/* Batch History */}
-            <Card>
+            <Card className="shrink-0">
               <CardContent className="p-4">
                 <BatchHistory
                   onImageSelect={handleBatchImageSelect}
@@ -138,13 +138,13 @@ export default function GeneratePage() {
             </Card>
           </div>
 
-          {/* Right Panel - Additional Options */}
-          <div className="lg:col-span-3 flex flex-col gap-4">
-            <Card className="flex-1 overflow-hidden">
-              <CardHeader className="py-3 px-4">
+          {/* Right Panel - Advanced (fixed height, internal scroll) */}
+          <div className="lg:col-span-3 h-full max-h-full overflow-hidden">
+            <Card className="h-full flex flex-col">
+              <CardHeader className="py-3 px-4 shrink-0">
                 <CardTitle className="text-base">Advanced</CardTitle>
               </CardHeader>
-              <CardContent className="p-0 overflow-hidden">
+              <CardContent className="flex-1 p-0 overflow-auto">
                 <ParameterPanel showAdvanced />
               </CardContent>
             </Card>

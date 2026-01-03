@@ -3,5 +3,6 @@ export { NumberInput } from "./NumberInput";
 export { TextInput } from "./TextInput";
 export { DropdownInput } from "./DropdownInput";
 export { CheckboxInput } from "./CheckboxInput";
+export { ImageInput } from "./ImageInput";
 export { ParameterPanel } from "./ParameterPanel";
 export { ResolutionSelector } from "./ResolutionSelector";

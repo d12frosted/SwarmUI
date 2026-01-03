@@ -8,6 +8,7 @@ import { NumberInput } from "./NumberInput";
 import { TextInput } from "./TextInput";
 import { DropdownInput } from "./DropdownInput";
 import { CheckboxInput } from "./CheckboxInput";
+import { ImageInput } from "./ImageInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -167,6 +168,18 @@ export function ParameterPanel({ showAdvanced = false, filterGroup }: ParameterP
             value={String(value || param.values[0])}
             onChange={(v) => setValue(param.id, v)}
             options={param.values}
+          />
+        );
+
+      case "image":
+        return (
+          <ImageInput
+            key={param.id}
+            id={param.id}
+            label={param.name}
+            description={param.description}
+            value={String(value || "")}
+            onChange={(v) => setValue(param.id, v)}
           />
         );
 

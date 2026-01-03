@@ -111,8 +111,13 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
             }
           }
 
+          // Backend returns URLs like "/Output/..." - use as-is if starting with / or data:
+          const finalUrl = imageUrl.startsWith("data:") || imageUrl.startsWith("/")
+            ? imageUrl
+            : `/${imageUrl}`;
+
           const generatedImage: GeneratedImage = {
-            image: imageUrl.startsWith("data:") ? imageUrl : `/${imageUrl}`,
+            image: finalUrl,
             metadata: metadata as ImageMetadata,
             batch_id: requestId,
           };
@@ -138,8 +143,13 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
               }
             }
 
+            // Backend returns URLs like "/Output/..." - use as-is if starting with / or data:
+            const finalUrl = imageUrl.startsWith("data:") || imageUrl.startsWith("/")
+              ? imageUrl
+              : `/${imageUrl}`;
+
             const generatedImage: GeneratedImage = {
-              image: imageUrl.startsWith("data:") ? imageUrl : `/${imageUrl}`,
+              image: finalUrl,
               metadata: metadata as ImageMetadata,
               batch_id: requestId,
             };

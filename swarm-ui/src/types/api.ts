@@ -90,6 +90,9 @@ export interface ModelData {
   tags?: string[];
   is_supported_model_format?: boolean;
   hash?: string;
+  // LoRA-specific fields
+  lora_default_weight?: number | string;
+  lora_default_confinement?: number | string;
 }
 
 export interface ModelListResponse {

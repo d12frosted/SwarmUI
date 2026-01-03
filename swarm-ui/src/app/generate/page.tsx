@@ -195,7 +195,7 @@ export default function GeneratePage() {
                       </div>
                   </div>
                 </TabsContent>
-                <TabsContent value="all" className="flex-1 overflow-hidden m-0">
+                <TabsContent value="all" className="flex-1 m-0 overflow-auto">
                   <ParameterPanel showAdvanced />
                 </TabsContent>
               </Tabs>

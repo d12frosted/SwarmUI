@@ -9,7 +9,6 @@ import { TextInput } from "./TextInput";
 import { DropdownInput } from "./DropdownInput";
 import { CheckboxInput } from "./CheckboxInput";
 import { ImageInput } from "./ImageInput";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -201,9 +200,9 @@ export function ParameterPanel({ showAdvanced = false, filterGroup }: ParameterP
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col">
       {/* Search and Reset */}
-      <div className="flex items-center gap-2 p-3 border-b">
+      <div className="flex items-center gap-2 p-3 border-b sticky top-0 bg-background z-10">
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -225,8 +224,7 @@ export function ParameterPanel({ showAdvanced = false, filterGroup }: ParameterP
       </div>
 
       {/* Parameters */}
-      <ScrollArea className="flex-1">
-        <div className="p-3 space-y-4">
+      <div className="p-3 space-y-4">
           {/* Core Parameters */}
           {coreParams.map(renderParameter)}
 
@@ -258,8 +256,7 @@ export function ParameterPanel({ showAdvanced = false, filterGroup }: ParameterP
               </Collapsible>
             </>
           )}
-        </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }

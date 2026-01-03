@@ -10,6 +10,7 @@ import { GenerateButton, ImageResult, BatchHistory } from "@/components/generati
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { useTokenCount } from "@/hooks";
 import type { GeneratedImage } from "@/types/api";
 
 export default function GeneratePage() {
@@ -21,6 +22,10 @@ export default function GeneratePage() {
   const samplerOptions = paramTypes.find(p => p.id === "sampler")?.values || [];
   const schedulerOptions = paramTypes.find(p => p.id === "scheduler")?.values || [];
   const [selectedBatchIndex, setSelectedBatchIndex] = useState<number | undefined>();
+
+  // Token counting for prompts
+  const promptTokens = useTokenCount(String(values.prompt || ""));
+  const negativePromptTokens = useTokenCount(String(values.negativeprompt || ""));
 
   if (isLoading || !isInitialized) {
     return (
@@ -86,6 +91,8 @@ export default function GeneratePage() {
                         onChange={(v) => setValue("prompt", v)}
                         placeholder="A beautiful sunset over mountains..."
                         rows={6}
+                        showTokenCount
+                        tokenCount={promptTokens}
                       />
 
                       {/* Negative Prompt */}
@@ -97,6 +104,8 @@ export default function GeneratePage() {
                         onChange={(v) => setValue("negativeprompt", v)}
                         placeholder="blurry, low quality..."
                         rows={3}
+                        showTokenCount
+                        tokenCount={negativePromptTokens}
                       />
 
                       {/* Model Selector */}

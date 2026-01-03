@@ -70,18 +70,6 @@ export async function openImageFolder(
   await apiRequest("OpenImageFolder", { image: imageSrc }, { sessionId });
 }
 
-export interface CountTokensResponse {
-  count: number;
-  tokens: string[];
-}
-
-export async function countTokens(
-  text: string,
-  sessionId: string
-): Promise<CountTokensResponse> {
-  return apiRequest<CountTokensResponse>("CountTokens", { text }, { sessionId });
-}
-
 export interface DetailedTokensResponse {
   tokens: Array<{
     text: string;

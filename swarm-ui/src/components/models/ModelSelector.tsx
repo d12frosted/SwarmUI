@@ -29,7 +29,7 @@ interface ModelSelectorProps {
 
 export function ModelSelector({ onModelSelect }: ModelSelectorProps) {
   const { sessionId, isInitialized } = useSessionStore();
-  const { models, loadedModels, isLoading, isLoaded, loadModels, searchQuery, setSearchQuery, getFilteredModels } = useModelsStore();
+  const { loadedModels, isLoading, isLoaded, loadModels, searchQuery, setSearchQuery, getFilteredModels, getModelByName } = useModelsStore();
   const { values, setValue } = useParametersStore();
   const [open, setOpen] = useState(false);
 
@@ -49,7 +49,7 @@ export function ModelSelector({ onModelSelect }: ModelSelectorProps) {
   };
 
   const filteredModels = getFilteredModels();
-  const selectedModelData = currentModel ? models[currentModel] : null;
+  const selectedModelData = currentModel ? getModelByName(currentModel) : null;
 
   return (
     <div className="space-y-1.5">

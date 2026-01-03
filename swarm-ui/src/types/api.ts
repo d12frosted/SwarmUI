@@ -72,22 +72,29 @@ export interface RAMInfo {
 // Models
 export interface ModelData {
   name: string;
-  title: string;
-  author: string;
-  type: string;
-  description: string;
+  title?: string;
+  author?: string;
+  description?: string;
   preview_image?: string;
-  is_supported: boolean;
-  class?: string;
-  resolution: string;
-  architecture?: string;
-  hash?: string;
   loaded?: boolean;
+  architecture?: string;
+  class?: string;
+  compat_class?: string;
+  resolution?: string;
+  standard_width?: number;
+  standard_height?: number;
+  license?: string;
+  date?: string;
+  usage_hint?: string;
+  trigger_phrase?: string;
+  tags?: string[];
+  is_supported_model_format?: boolean;
+  hash?: string;
 }
 
 export interface ModelListResponse {
-  models: Record<string, ModelData>;
-  modified: boolean;
+  files: ModelData[];
+  folders: string[];
 }
 
 // Generation Parameters

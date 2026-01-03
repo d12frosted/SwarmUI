@@ -12,10 +12,14 @@ export interface ListModelsRequest {
 }
 
 export async function listModels(
-  data: ListModelsRequest,
+  data: ListModelsRequest = {},
   sessionId: string
 ): Promise<ModelListResponse> {
-  return apiRequest<ModelListResponse>("ListModels", data, { sessionId });
+  return apiRequest<ModelListResponse>("ListModels", {
+    path: data.path ?? "",
+    depth: data.depth ?? 10,
+    subtype: data.subtype,
+  }, { sessionId });
 }
 
 export async function describeModel(

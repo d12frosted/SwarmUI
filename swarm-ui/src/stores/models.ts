@@ -2,11 +2,11 @@
 
 import { create } from "zustand";
 import type { ModelData } from "@/types/api";
-import { listModels, describeModel, listLoadedModels } from "@/lib/api";
+import { listModels, listLoadedModels } from "@/lib/api";
 
 interface ModelsState {
-  // Models data
-  models: Record<string, ModelData>;
+  // Models data - stored as array now
+  models: ModelData[];
   loadedModels: string[];
   currentModel: string | null;
 
@@ -17,26 +17,27 @@ interface ModelsState {
 
   // Filters
   searchQuery: string;
-  modelType: string | null;
+  modelClass: string | null;
 
   // Actions
   loadModels: (sessionId: string) => Promise<void>;
   refreshLoadedModels: (sessionId: string) => Promise<void>;
   setCurrentModel: (modelName: string | null) => void;
   setSearchQuery: (query: string) => void;
-  setModelType: (type: string | null) => void;
+  setModelClass: (cls: string | null) => void;
   getFilteredModels: () => ModelData[];
+  getModelByName: (name: string) => ModelData | undefined;
 }
 
 export const useModelsStore = create<ModelsState>((set, get) => ({
-  models: {},
+  models: [],
   loadedModels: [],
   currentModel: null,
   isLoading: false,
   isLoaded: false,
   error: null,
   searchQuery: "",
-  modelType: null,
+  modelClass: null,
 
   loadModels: async (sessionId: string) => {
     if (get().isLoading) return;
@@ -45,15 +46,18 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
 
     try {
       // Load all models
-      const response = await listModels({ depth: 10 }, sessionId);
+      const response = await listModels({}, sessionId);
+
+      // Extract loaded models from the response
+      const loadedModels = response.files
+        .filter((m) => m.loaded)
+        .map((m) => m.name);
 
       set({
-        models: response.models,
+        models: response.files,
+        loadedModels,
         isLoaded: true,
       });
-
-      // Also load currently loaded models
-      await get().refreshLoadedModels(sessionId);
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : "Failed to load models",
@@ -80,13 +84,13 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     set({ searchQuery: query });
   },
 
-  setModelType: (type: string | null) => {
-    set({ modelType: type });
+  setModelClass: (cls: string | null) => {
+    set({ modelClass: cls });
   },
 
   getFilteredModels: () => {
-    const { models, searchQuery, modelType } = get();
-    let filtered = Object.values(models);
+    const { models, searchQuery, modelClass, loadedModels } = get();
+    let filtered = [...models];
 
     // Filter by search query
     if (searchQuery) {
@@ -95,25 +99,31 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         (model) =>
           model.name.toLowerCase().includes(query) ||
           model.title?.toLowerCase().includes(query) ||
-          model.description?.toLowerCase().includes(query)
+          model.description?.toLowerCase().includes(query) ||
+          model.author?.toLowerCase().includes(query)
       );
     }
 
-    // Filter by type
-    if (modelType) {
-      filtered = filtered.filter((model) => model.type === modelType);
+    // Filter by class
+    if (modelClass) {
+      filtered = filtered.filter((model) => model.class === modelClass);
     }
 
-    // Sort: loaded models first, then alphabetically
-    const { loadedModels } = get();
+    // Sort: loaded models first, then alphabetically by title/name
     filtered.sort((a, b) => {
-      const aLoaded = loadedModels.includes(a.name);
-      const bLoaded = loadedModels.includes(b.name);
+      const aLoaded = a.loaded || loadedModels.includes(a.name);
+      const bLoaded = b.loaded || loadedModels.includes(b.name);
       if (aLoaded && !bLoaded) return -1;
       if (!aLoaded && bLoaded) return 1;
-      return a.name.localeCompare(b.name);
+      const aName = a.title || a.name;
+      const bName = b.title || b.name;
+      return aName.localeCompare(bName);
     });
 
     return filtered;
+  },
+
+  getModelByName: (name: string) => {
+    return get().models.find((m) => m.name === name);
   },
 }));

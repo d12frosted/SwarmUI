@@ -149,12 +149,12 @@ interface ModelCardProps {
 function ModelCard({ model, isSelected, isLoaded, onSelect }: ModelCardProps) {
   return (
     <Card
-      className={`cursor-pointer transition-colors hover:bg-accent ${
+      className={`cursor-pointer transition-colors hover:bg-accent overflow-hidden ${
         isSelected ? "border-primary bg-accent" : ""
       }`}
       onClick={onSelect}
     >
-      <CardContent className="p-3">
+      <CardContent className="p-3 overflow-hidden">
         <div className="flex items-start gap-3">
           {/* Preview Image */}
           {model.preview_image && (
@@ -169,8 +169,8 @@ function ModelCard({ model, isSelected, isLoaded, onSelect }: ModelCardProps) {
 
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h4 className="font-medium truncate">
+            <div className="flex items-center gap-2 min-w-0">
+              <h4 className="font-medium truncate flex-1 min-w-0">
                 {model.title || model.name}
               </h4>
               {isSelected && <Check className="h-4 w-4 text-primary shrink-0" />}
@@ -182,19 +182,19 @@ function ModelCard({ model, isSelected, isLoaded, onSelect }: ModelCardProps) {
               </p>
             )}
 
-            <div className="flex items-center gap-2 mt-1.5">
+            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
               {isLoaded && (
-                <Badge variant="default" className="text-xs">
+                <Badge variant="default" className="text-xs shrink-0">
                   Loaded
                 </Badge>
               )}
               {model.class && (
-                <Badge variant="outline" className="text-xs">
+                <Badge variant="outline" className="text-xs shrink-0">
                   {model.class}
                 </Badge>
               )}
               {model.resolution && (
-                <Badge variant="secondary" className="text-xs">
+                <Badge variant="secondary" className="text-xs shrink-0">
                   {model.resolution}
                 </Badge>
               )}

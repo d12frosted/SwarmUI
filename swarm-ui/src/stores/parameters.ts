@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { T2IParamType, T2IParamsResponse } from "@/types/api";
 import { listT2IParams } from "@/lib/api";
+import { useStatusStore } from "./status";
 
 interface ParametersState {
   // Parameter definitions from server
@@ -114,11 +115,28 @@ export const useParametersStore = create<ParametersState>()(
         const { values, paramTypes } = get();
         const input: Record<string, unknown> = {};
 
+        // Get supported features from status store
+        const supportedFeatures = useStatusStore.getState().supportedFeatures;
+
         for (const param of paramTypes) {
           const value = values[param.id];
-          if (value !== undefined && value !== null && value !== "") {
-            input[param.id] = value;
+
+          // Skip empty values
+          if (value === undefined || value === null || value === "") {
+            continue;
           }
+
+          // Skip parameters that require unsupported backend features
+          if (param.feature_flag && !supportedFeatures.includes(param.feature_flag)) {
+            continue;
+          }
+
+          // Skip toggleable parameters that are at default/false value
+          if (param.toggleable && value === param.default) {
+            continue;
+          }
+
+          input[param.id] = value;
         }
 
         // Always include core params

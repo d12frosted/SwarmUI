@@ -32,7 +32,7 @@ export function ParameterPanel({ showAdvanced = false, filterGroup }: ParameterP
   const { sessionId, isInitialized } = useSessionStore();
   const { paramTypes, values, isLoading, isLoaded, loadParams, setValue, resetToDefaults } = useParametersStore();
   const [searchQuery, setSearchQuery] = useState("");
-  const [advancedOpen, setAdvancedOpen] = useState(showAdvanced);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // Load parameters on mount
   useEffect(() => {

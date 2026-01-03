@@ -44,9 +44,11 @@ export class WSClient {
   }
 
   private getWebSocketUrl(): string {
+    // WebSocket connections go directly to the backend server
+    // Next.js rewrites only proxy HTTP requests, not WebSocket
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.host;
-    return `${protocol}//${host}/API/${this.endpoint}`;
+    const backendHost = process.env.NEXT_PUBLIC_BACKEND_HOST || "localhost:7801";
+    return `${protocol}//${backendHost}/API/${this.endpoint}`;
   }
 
   connect(data: Record<string, unknown> = {}): Promise<void> {

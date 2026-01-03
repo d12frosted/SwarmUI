@@ -70,19 +70,19 @@ export function ImageResult({ className }: ImageResultProps) {
   return (
     <div className={`flex flex-col h-full ${className}`}>
       {/* Main Image Display */}
-      <div className="flex-1 relative bg-muted/30 rounded-lg overflow-hidden">
+      <div className="flex-1 relative rounded-lg overflow-hidden flex items-center justify-center">
         {isGenerating && previewImage ? (
           // Show preview during generation
-          <div className="relative w-full h-full">
+          <div className="relative max-w-full max-h-full">
             <img
               src={previewImage}
               alt="Generation preview"
-              className="w-full h-full object-contain"
+              className="max-w-full max-h-full object-contain rounded-lg"
             />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-              <div className="text-center text-white">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
-                <p className="text-sm">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center text-white bg-black/40 px-4 py-2 rounded-lg">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-1" />
+                <p className="text-sm font-medium">
                   {progress
                     ? `${Math.round(progress.overall_percent * 100)}%`
                     : "Generating..."}
@@ -92,16 +92,16 @@ export function ImageResult({ className }: ImageResultProps) {
           </div>
         ) : displayImage ? (
           // Show generated image
-          <div className="relative w-full h-full group">
+          <div className="relative max-w-full max-h-full group">
             <img
               src={displayImage.image}
               alt="Generated image"
-              className="w-full h-full object-contain cursor-pointer"
+              className="max-w-full max-h-full object-contain cursor-pointer rounded-lg"
               onClick={() => handleOpenFullView(displayImage)}
             />
             {/* Overlay actions */}
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-              <div className="flex gap-2">
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
+              <div className="flex gap-2 bg-black/40 p-2 rounded-lg">
                 <Button
                   variant="secondary"
                   size="icon"

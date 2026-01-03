@@ -98,6 +98,18 @@ export interface ModelListResponse {
 }
 
 // Generation Parameters
+export interface T2IParamGroup {
+  id: string;
+  name: string;
+  description?: string;
+  toggles: boolean;
+  open: boolean;
+  priority: number;
+  advanced?: boolean;
+  can_shrink?: boolean;
+  parent?: string;
+}
+
 export interface T2IParamType {
   id: string;
   name: string;
@@ -120,6 +132,7 @@ export interface T2IParamType {
 
 export interface T2IParamsResponse {
   list: T2IParamType[];
+  groups: T2IParamGroup[];
   models: string[];
   wildcards: string[];
   param_edits: Record<string, unknown>;

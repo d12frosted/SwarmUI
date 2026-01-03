@@ -36,34 +36,23 @@ const SIDE_LENGTH_MAX = 4096;
 const SIDE_LENGTH_STEP = 64;
 
 // Pre-compute valid resolution pairs for an aspect ratio
-// Both dimensions must be multiples of SIDE_LENGTH_STEP
+// Each width maps to exactly one height (the closest valid one)
 function computeValidResolutions(aspectW: number, aspectH: number): [number, number][] {
   const resolutions: [number, number][] = [];
-  const ratio = aspectW / aspectH;
+  const targetRatio = aspectW / aspectH;
 
-  // Iterate through possible longer-side values
-  for (let longer = SIDE_LENGTH_MIN; longer <= SIDE_LENGTH_MAX; longer += SIDE_LENGTH_STEP) {
-    let w: number, h: number;
+  // Iterate through all possible widths
+  for (let w = SIDE_LENGTH_MIN; w <= SIDE_LENGTH_MAX; w += SIDE_LENGTH_STEP) {
+    // Compute ideal height for this width to match target ratio
+    const idealH = w / targetRatio;
 
-    if (ratio >= 1) {
-      // Width is longer
-      w = longer;
-      h = Math.round(longer / ratio / SIDE_LENGTH_STEP) * SIDE_LENGTH_STEP;
-    } else {
-      // Height is longer
-      h = longer;
-      w = Math.round(longer * ratio / SIDE_LENGTH_STEP) * SIDE_LENGTH_STEP;
-    }
+    // Round to nearest step
+    const h = Math.round(idealH / SIDE_LENGTH_STEP) * SIDE_LENGTH_STEP;
 
-    // Check bounds
-    if (w < SIDE_LENGTH_MIN || w > SIDE_LENGTH_MAX) continue;
+    // Check height bounds
     if (h < SIDE_LENGTH_MIN || h > SIDE_LENGTH_MAX) continue;
 
-    // Check if this resolution is already in the list (avoid duplicates)
-    const exists = resolutions.some(([ew, eh]) => ew === w && eh === h);
-    if (!exists) {
-      resolutions.push([w, h]);
-    }
+    resolutions.push([w, h]);
   }
 
   // Sort by total pixels (area)

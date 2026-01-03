@@ -71,23 +71,33 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
           setPreviewImage(requestId, message.gen_progress.preview);
         }
 
-        // Handle generated images - image field is an object with {image, batch_index, metadata}
+        // Handle generated images - image field can be object {image, batch_index, metadata} or string
         if (message.image) {
-          const imgData = message.image;
-          console.log("[Gen] Final image:", imgData);
+          console.log("[Gen] Final image raw:", message.image);
 
-          // Parse metadata if it's a JSON string
+          // Handle both object and string formats
+          const imgData = message.image;
+          const imageUrl = typeof imgData === 'string'
+            ? imgData
+            : (imgData as { image?: string }).image;
+
+          if (!imageUrl) {
+            console.warn("[Gen] No image URL found in message:", message.image);
+            return;
+          }
+
+          // Parse metadata if available
           let metadata: Record<string, unknown> = {};
-          try {
-            if (imgData.metadata) {
+          if (typeof imgData === 'object' && imgData.metadata) {
+            try {
               metadata = JSON.parse(imgData.metadata);
+            } catch {
+              metadata = { raw: imgData.metadata };
             }
-          } catch {
-            metadata = { raw: imgData.metadata };
           }
 
           const generatedImage: GeneratedImage = {
-            image: imgData.image.startsWith("data:") ? imgData.image : `/${imgData.image}`,
+            image: imageUrl.startsWith("data:") ? imageUrl : `/${imageUrl}`,
             metadata: metadata as ImageMetadata,
             batch_id: requestId,
           };
@@ -96,19 +106,25 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
         }
 
         // Handle multiple images
-        if (message.images) {
+        if (message.images && Array.isArray(message.images)) {
           for (const imgData of message.images) {
+            const imageUrl = typeof imgData === 'string'
+              ? imgData
+              : (imgData as { image?: string }).image;
+
+            if (!imageUrl) continue;
+
             let metadata: Record<string, unknown> = {};
-            try {
-              if (imgData.metadata) {
+            if (typeof imgData === 'object' && imgData.metadata) {
+              try {
                 metadata = JSON.parse(imgData.metadata);
+              } catch {
+                metadata = { raw: imgData.metadata };
               }
-            } catch {
-              metadata = { raw: imgData.metadata };
             }
 
             const generatedImage: GeneratedImage = {
-              image: imgData.image.startsWith("data:") ? imgData.image : `/${imgData.image}`,
+              image: imageUrl.startsWith("data:") ? imageUrl : `/${imageUrl}`,
               metadata: metadata as ImageMetadata,
               batch_id: requestId,
             };

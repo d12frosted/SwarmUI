@@ -189,7 +189,7 @@ export interface WSImageResult {
 export interface WSMessage {
   status?: ServerStatus;
   gen_progress?: GenerationProgress;
-  image?: WSImageResult;
+  image?: WSImageResult | string;
   images?: WSImageResult[];
   discard_indices?: number[];
   error?: string;

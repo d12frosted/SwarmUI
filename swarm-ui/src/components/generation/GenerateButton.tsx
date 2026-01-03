@@ -1,14 +1,15 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useSessionStore } from "@/stores/session";
 import { useStatusStore } from "@/stores/status";
 import { useGenerationStore } from "@/stores/generation";
 import { useParametersStore } from "@/stores/parameters";
 import { WSClient } from "@/lib/websocket/client";
 import { interruptAll } from "@/lib/api";
-import { Play, Square, Loader2 } from "lucide-react";
+import { Play, Square, AlertCircle } from "lucide-react";
 import type { WSMessage, GeneratedImage, GenerationProgress } from "@/types/api";
 
 interface GenerateButtonProps {
@@ -31,9 +32,21 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
     cancelGeneration,
   } = useGenerationStore();
   const { getGenerationInput } = useParametersStore();
+  const [lastError, setLastError] = useState<string | null>(null);
+
+  // Clear error after 10 seconds
+  useEffect(() => {
+    if (lastError) {
+      const timer = setTimeout(() => setLastError(null), 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [lastError]);
 
   const handleGenerate = useCallback(async () => {
     if (!sessionId) return;
+
+    // Clear previous error
+    setLastError(null);
 
     // Get generation parameters
     const input = getGenerationInput();
@@ -79,11 +92,13 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
 
         // Handle errors
         if (message.error) {
+          setLastError(message.error);
           failGeneration(requestId, message.error);
           client.disconnect();
         }
       },
       onError: (error) => {
+        setLastError(error.message);
         failGeneration(requestId, error.message);
       },
       onStateChange: (state) => {
@@ -181,6 +196,14 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
         <p className="text-xs text-muted-foreground text-center">
           Queue: {waitingGens} waiting, {liveGens} generating
         </p>
+      )}
+
+      {/* Error display */}
+      {lastError && (
+        <Alert variant="destructive" className="mt-2">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="ml-2">{lastError}</AlertDescription>
+        </Alert>
       )}
     </div>
   );

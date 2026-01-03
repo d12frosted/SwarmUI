@@ -61,15 +61,20 @@ export class WSClient {
       this.aborted = false;
       this.setState("connecting");
 
+      const wsUrl = this.getWebSocketUrl();
+      console.log("[WS] Connecting to:", wsUrl);
+
       try {
-        this.socket = new WebSocket(this.getWebSocketUrl());
+        this.socket = new WebSocket(wsUrl);
       } catch (error) {
+        console.error("[WS] Failed to create WebSocket:", error);
         this.setState("error");
         reject(error);
         return;
       }
 
       this.socket.onopen = () => {
+        console.log("[WS] Connected");
         this.setState("connected");
         this.reconnectAttempts = 0;
 
@@ -78,6 +83,7 @@ export class WSClient {
           ...data,
           session_id: this.options.sessionId,
         };
+        console.log("[WS] Sending payload:", payload);
         this.socket?.send(JSON.stringify(payload));
         resolve();
       };
@@ -85,6 +91,7 @@ export class WSClient {
       this.socket.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
+          console.log("[WS] Message received:", message);
 
           // Check for errors
           if (message.error) {
@@ -111,11 +118,13 @@ export class WSClient {
       };
 
       this.socket.onerror = (event) => {
+        console.error("[WS] Error:", event);
         this.setState("error");
         this.options.onError?.(new Error("WebSocket error"));
       };
 
       this.socket.onclose = (event) => {
+        console.log("[WS] Closed:", { code: event.code, reason: event.reason, wasClean: event.wasClean });
         if (this.aborted) {
           this.setState("disconnected");
           return;

@@ -118,6 +118,25 @@ export const useParametersStore = create<ParametersState>()(
         // Get supported features from status store
         const supportedFeatures = useStatusStore.getState().supportedFeatures;
 
+        // Check if we have an init image - if not, skip image-dependent params
+        const hasInitImage = values.initimage && values.initimage !== "";
+
+        // Parameters that require an init image to work
+        const imageRequiredParams = new Set([
+          "controlnetmodel",
+          "controlnetstrength",
+          "controlnetimageinput",
+          "revisedimagecreativefulness",
+          "inpaintmode",
+          "maskblur",
+          "maskshrinkgrow",
+          "refinermodel",
+          "refinermethod",
+          "refinercontrolpercentage",
+          "refinerupscale",
+          "refinerupscalemethod",
+        ]);
+
         for (const param of paramTypes) {
           const value = values[param.id];
 
@@ -133,6 +152,11 @@ export const useParametersStore = create<ParametersState>()(
 
           // Skip toggleable parameters that are at default/false value
           if (param.toggleable && value === param.default) {
+            continue;
+          }
+
+          // Skip image-dependent parameters when no init image
+          if (!hasInitImage && imageRequiredParams.has(param.id)) {
             continue;
           }
 

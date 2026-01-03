@@ -7,10 +7,9 @@ import { useParametersStore } from "@/stores/parameters";
 import { ParameterPanel, TextInput, ResolutionSelector, SliderInput, NumberInput, DropdownInput } from "@/components/parameters";
 import { ModelSelector } from "@/components/models/ModelSelector";
 import { GenerateButton, ImageResult, BatchHistory } from "@/components/generation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import type { GeneratedImage } from "@/types/api";
 
 export default function GeneratePage() {
@@ -47,8 +46,8 @@ export default function GeneratePage() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b bg-card">
-        <div className="container flex items-center justify-between h-14 px-4">
-          <h1 className="text-xl font-bold">SwarmUI</h1>
+        <div className="flex items-center justify-between h-12 px-4">
+          <h1 className="text-lg font-bold">SwarmUI</h1>
           <div className="flex items-center gap-2">
             {loadingModels > 0 && (
               <Badge variant="secondary">Loading model...</Badge>
@@ -63,23 +62,21 @@ export default function GeneratePage() {
         </div>
       </header>
 
-      {/* Main Content - Fixed viewport height with independent scrolling columns */}
-      <div className="px-4 py-4 h-[calc(100vh-3.5rem)] overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-full items-start">
-          {/* Left Panel - Parameters (fixed height, internal scroll) */}
-          <div className="lg:col-span-3 h-full max-h-full overflow-hidden">
+      {/* Main Content - 3 column layout */}
+      <div className="px-3 py-3 h-[calc(100vh-3rem)] overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 h-full">
+          {/* Left Panel - Parameters */}
+          <div className="lg:col-span-3 h-full overflow-hidden">
             <Card className="h-full flex flex-col">
-              <CardHeader className="py-3 px-4 shrink-0">
-                <CardTitle className="text-base">Parameters</CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1 p-0 overflow-hidden">
-                <Tabs defaultValue="main" className="h-full flex flex-col">
-                  <TabsList className="mx-4 mb-2 shrink-0">
-                    <TabsTrigger value="main">Main</TabsTrigger>
-                    <TabsTrigger value="all">All</TabsTrigger>
+              <Tabs defaultValue="main" className="h-full flex flex-col">
+                <div className="flex items-center justify-between px-3 py-2 border-b shrink-0">
+                  <TabsList className="h-8">
+                    <TabsTrigger value="main" className="text-xs px-3 h-7">Main</TabsTrigger>
+                    <TabsTrigger value="all" className="text-xs px-3 h-7">All</TabsTrigger>
                   </TabsList>
-                  <TabsContent value="main" className="flex-1 overflow-auto m-0">
-                    <div className="flex flex-col px-4 pb-4 space-y-4">
+                </div>
+                <TabsContent value="main" className="flex-1 overflow-auto m-0">
+                  <div className="flex flex-col p-3 space-y-3">
                       {/* Prompt */}
                       <TextInput
                         id="prompt"
@@ -187,49 +184,41 @@ export default function GeneratePage() {
                       />
 
                       {/* Generate Button */}
-                      <div className="pt-2">
+                      <div className="pt-1">
                         <GenerateButton onImageGenerated={handleImageGenerated} />
                       </div>
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="all" className="flex-1 overflow-hidden m-0">
-                    <ParameterPanel />
-                  </TabsContent>
-                </Tabs>
+                  </div>
+                </TabsContent>
+                <TabsContent value="all" className="flex-1 overflow-hidden m-0">
+                  <ParameterPanel />
+                </TabsContent>
+              </Tabs>
+            </Card>
+          </div>
+
+          {/* Center Panel - Image Result */}
+          <div className="lg:col-span-6 h-full overflow-hidden">
+            <Card className="h-full flex flex-col">
+              <div className="px-3 py-2 border-b shrink-0">
+                <span className="text-sm font-medium">Result</span>
+              </div>
+              <CardContent className="flex-1 p-3 overflow-hidden">
+                <ImageResult className="h-full" />
               </CardContent>
             </Card>
           </div>
 
-          {/* Center Panel - Image Result (fills remaining height) */}
-          <div className="lg:col-span-6 h-full max-h-full flex flex-col gap-4 overflow-hidden">
-            <Card className="flex-1 flex flex-col overflow-hidden min-h-0">
-              <CardHeader className="py-3 px-4 shrink-0">
-                <CardTitle className="text-base">Result</CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1 p-4 pt-0 overflow-hidden min-h-0">
-                <ImageResult className="h-full" />
-              </CardContent>
-            </Card>
-
-            {/* Batch History */}
-            <Card className="shrink-0">
-              <CardContent className="p-4">
+          {/* Right Panel - History */}
+          <div className="lg:col-span-3 h-full overflow-hidden">
+            <Card className="h-full flex flex-col">
+              <div className="px-3 py-2 border-b shrink-0">
+                <span className="text-sm font-medium">History</span>
+              </div>
+              <CardContent className="flex-1 p-3 overflow-auto">
                 <BatchHistory
                   onImageSelect={handleBatchImageSelect}
                   selectedIndex={selectedBatchIndex}
                 />
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right Panel - Advanced (fixed height, internal scroll) */}
-          <div className="lg:col-span-3 h-full max-h-full overflow-hidden">
-            <Card className="h-full flex flex-col">
-              <CardHeader className="py-3 px-4 shrink-0">
-                <CardTitle className="text-base">Advanced</CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1 p-0 overflow-auto">
-                <ParameterPanel showAdvanced />
               </CardContent>
             </Card>
           </div>

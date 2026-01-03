@@ -7,9 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Download,
@@ -161,25 +161,29 @@ export function ImageResult({ className }: ImageResultProps) {
 
       {/* Full View Dialog */}
       <Dialog open={fullViewOpen} onOpenChange={setFullViewOpen}>
-        <DialogContent className="max-w-[90vw] max-h-[90vh] p-0">
-          <DialogHeader className="p-4 pb-0">
+        <DialogContent className="!w-[90vw] !h-[90vh] !max-w-[90vw] !max-h-[90vh] !p-0 overflow-hidden">
+          <VisuallyHidden>
             <DialogTitle>Image Details</DialogTitle>
-          </DialogHeader>
+          </VisuallyHidden>
           {selectedImage && (
-            <div className="flex flex-col md:flex-row gap-4 p-4">
-              {/* Image */}
-              <div className="flex-1 flex items-center justify-center bg-muted rounded-lg overflow-hidden">
+            <div className="flex flex-col lg:flex-row h-full">
+              {/* Image - takes most of the space */}
+              <div className="flex-1 flex items-center justify-center bg-black/95">
                 <img
                   src={selectedImage.image}
                   alt="Generated image"
-                  className="max-w-full max-h-[70vh] object-contain"
+                  className="max-w-full max-h-[90vh] object-contain"
                 />
               </div>
 
               {/* Details Panel */}
-              <div className="w-full md:w-80 space-y-4">
+              <div className="w-full lg:w-96 bg-background border-l flex flex-col shrink-0">
+                <div className="p-4 border-b shrink-0">
+                  <h2 className="font-semibold">Image Details</h2>
+                </div>
+
                 {/* Actions */}
-                <div className="flex gap-2">
+                <div className="flex gap-2 p-4 border-b shrink-0">
                   <Button
                     variant="outline"
                     size="sm"
@@ -199,18 +203,22 @@ export function ImageResult({ className }: ImageResultProps) {
                 </div>
 
                 {/* Metadata */}
-                <ScrollArea className="h-[300px]">
-                  <div className="space-y-2 text-sm">
-                    {Object.entries(selectedImage.metadata || {}).map(([key, value]) => (
-                      <div key={key} className="flex justify-between gap-2">
-                        <span className="font-medium text-muted-foreground capitalize">
-                          {key}:
-                        </span>
-                        <span className="text-right truncate max-w-[200px]">
-                          {String(value)}
-                        </span>
-                      </div>
-                    ))}
+                <ScrollArea className="flex-1 p-4">
+                  <div className="space-y-3 text-sm">
+                    {Object.entries(selectedImage.metadata || {}).length === 0 ? (
+                      <p className="text-muted-foreground">No metadata available</p>
+                    ) : (
+                      Object.entries(selectedImage.metadata || {}).map(([key, value]) => (
+                        <div key={key} className="space-y-1">
+                          <span className="font-medium text-muted-foreground capitalize text-xs">
+                            {key}
+                          </span>
+                          <p className="break-words">
+                            {String(value)}
+                          </p>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </ScrollArea>
               </div>

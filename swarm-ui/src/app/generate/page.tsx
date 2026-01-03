@@ -110,29 +110,27 @@ export default function GeneratePage() {
                         onHeightChange={(h) => setValue("height", h)}
                       />
 
-                      {/* Steps */}
-                      <SliderInput
-                        id="steps"
-                        label="Steps"
-                        description="Number of denoising steps"
-                        value={Number(values.steps) || 20}
-                        onChange={(v) => setValue("steps", v)}
-                        min={1}
-                        max={150}
-                        step={1}
-                      />
-
-                      {/* CFG Scale */}
-                      <SliderInput
-                        id="cfgscale"
-                        label="CFG Scale"
-                        description="How closely to follow the prompt"
-                        value={Number(values.cfgscale) || 7}
-                        onChange={(v) => setValue("cfgscale", v)}
-                        min={1}
-                        max={30}
-                        step={0.5}
-                      />
+                      {/* Steps & CFG Scale - 2 column */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <SliderInput
+                          id="steps"
+                          label="Steps"
+                          value={Number(values.steps) || 20}
+                          onChange={(v) => setValue("steps", v)}
+                          min={1}
+                          max={150}
+                          step={1}
+                        />
+                        <SliderInput
+                          id="cfgscale"
+                          label="CFG"
+                          value={Number(values.cfgscale) || 7}
+                          onChange={(v) => setValue("cfgscale", v)}
+                          min={1}
+                          max={30}
+                          step={0.5}
+                        />
+                      </div>
 
                       {/* Sampler & Scheduler - 2 column */}
                       <div className="grid grid-cols-2 gap-2">

@@ -11,12 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { HelpCircle } from "lucide-react";
 
 // Common aspect ratios
 const ASPECT_RATIOS = [
@@ -172,39 +166,30 @@ export function ResolutionSelector({
   const isCustom = selectedAspect === "custom";
 
   return (
-    <div className="space-y-3">
-      {/* Aspect Ratio */}
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-1.5">
-          <Label className="text-sm">Aspect Ratio</Label>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Select the image proportions</p>
-            </TooltipContent>
-          </Tooltip>
+    <div className="space-y-2">
+      {/* 2-column grid: Aspect Ratio | Size */}
+      <div className="grid grid-cols-2 gap-2">
+        {/* Aspect Ratio */}
+        <div className="space-y-1">
+          <Label className="text-sm">Aspect</Label>
+          <Select value={selectedAspect} onValueChange={handleAspectChange}>
+            <SelectTrigger className="h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ASPECT_RATIOS.map((ar) => (
+                <SelectItem key={ar.value} value={ar.value}>
+                  {ar.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={selectedAspect} onValueChange={handleAspectChange}>
-          <SelectTrigger className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {ASPECT_RATIOS.map((ar) => (
-              <SelectItem key={ar.value} value={ar.value}>
-                {ar.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
 
-      {isCustom ? (
-        /* Custom: Show Width & Height inputs */
-        <div className="grid grid-cols-2 gap-2">
+        {isCustom ? (
+          /* Custom: Show Width input (Height below) */
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Width</Label>
+            <Label className="text-sm">Width</Label>
             <Input
               type="number"
               value={width}
@@ -215,8 +200,31 @@ export function ResolutionSelector({
               className="h-8"
             />
           </div>
+        ) : (
+          /* Preset: Show Size info */
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Height</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Size</Label>
+              <span className="text-xs text-muted-foreground">{width}×{height}</span>
+            </div>
+            <Slider
+              value={[currentIndex]}
+              onValueChange={handleSliderChange}
+              min={0}
+              max={Math.max(0, validResolutions.length - 1)}
+              step={1}
+              className="w-full mt-2"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Custom mode: Height input on second row */}
+      {isCustom && (
+        <div className="grid grid-cols-2 gap-2">
+          <div /> {/* Empty cell to align with Width */}
+          <div className="space-y-1">
+            <Label className="text-sm">Height</Label>
             <Input
               type="number"
               value={height}
@@ -227,34 +235,6 @@ export function ResolutionSelector({
               className="h-8"
             />
           </div>
-        </div>
-      ) : (
-        /* Preset: Show Size slider */
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <Label className="text-sm">Size</Label>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Select from valid resolutions for this aspect ratio</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            <span className="text-sm text-muted-foreground">
-              {width}×{height}
-            </span>
-          </div>
-          <Slider
-            value={[currentIndex]}
-            onValueChange={handleSliderChange}
-            min={0}
-            max={Math.max(0, validResolutions.length - 1)}
-            step={1}
-            className="w-full"
-          />
         </div>
       )}
     </div>

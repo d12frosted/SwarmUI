@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,43 @@ const SIDE_LENGTH_MIN = 256;
 const SIDE_LENGTH_MAX = 4096;
 const SIDE_LENGTH_STEP = 64;
 
+// Pre-compute valid resolution pairs for an aspect ratio
+// Both dimensions must be multiples of SIDE_LENGTH_STEP
+function computeValidResolutions(aspectW: number, aspectH: number): [number, number][] {
+  const resolutions: [number, number][] = [];
+  const ratio = aspectW / aspectH;
+
+  // Iterate through possible longer-side values
+  for (let longer = SIDE_LENGTH_MIN; longer <= SIDE_LENGTH_MAX; longer += SIDE_LENGTH_STEP) {
+    let w: number, h: number;
+
+    if (ratio >= 1) {
+      // Width is longer
+      w = longer;
+      h = Math.round(longer / ratio / SIDE_LENGTH_STEP) * SIDE_LENGTH_STEP;
+    } else {
+      // Height is longer
+      h = longer;
+      w = Math.round(longer * ratio / SIDE_LENGTH_STEP) * SIDE_LENGTH_STEP;
+    }
+
+    // Check bounds
+    if (w < SIDE_LENGTH_MIN || w > SIDE_LENGTH_MAX) continue;
+    if (h < SIDE_LENGTH_MIN || h > SIDE_LENGTH_MAX) continue;
+
+    // Check if this resolution is already in the list (avoid duplicates)
+    const exists = resolutions.some(([ew, eh]) => ew === w && eh === h);
+    if (!exists) {
+      resolutions.push([w, h]);
+    }
+  }
+
+  // Sort by total pixels (area)
+  resolutions.sort((a, b) => (a[0] * a[1]) - (b[0] * b[1]));
+
+  return resolutions;
+}
+
 interface ResolutionSelectorProps {
   width: number;
   height: number;
@@ -51,6 +88,32 @@ export function ResolutionSelector({
   // Track selected aspect ratio (user's choice, not detected)
   const [selectedAspect, setSelectedAspect] = useState<string>("1:1");
 
+  // Pre-compute valid resolutions for the selected aspect ratio
+  const validResolutions = useMemo(() => {
+    const aspect = ASPECT_RATIOS.find((ar) => ar.value === selectedAspect);
+    if (!aspect || selectedAspect === "custom") return [];
+    return computeValidResolutions(aspect.width, aspect.height);
+  }, [selectedAspect]);
+
+  // Find the current resolution index in validResolutions
+  const currentIndex = useMemo(() => {
+    if (validResolutions.length === 0) return 0;
+    const idx = validResolutions.findIndex(([w, h]) => w === width && h === height);
+    if (idx !== -1) return idx;
+    // Find closest by area
+    const currentArea = width * height;
+    let closest = 0;
+    let closestDiff = Infinity;
+    validResolutions.forEach(([w, h], i) => {
+      const diff = Math.abs(w * h - currentArea);
+      if (diff < closestDiff) {
+        closestDiff = diff;
+        closest = i;
+      }
+    });
+    return closest;
+  }, [validResolutions, width, height]);
+
   // Initialize aspect ratio based on current dimensions
   useEffect(() => {
     const ratio = width / height;
@@ -64,9 +127,6 @@ export function ResolutionSelector({
     }
   }, []); // Only on mount
 
-  // Calculate side length (longer side)
-  const sideLength = Math.max(width, height);
-
   // Handle aspect ratio change
   const handleAspectChange = (value: string) => {
     setSelectedAspect(value);
@@ -76,46 +136,33 @@ export function ResolutionSelector({
     const aspect = ASPECT_RATIOS.find((ar) => ar.value === value);
     if (!aspect) return;
 
-    const ratio = aspect.width / aspect.height;
-    let newWidth: number;
-    let newHeight: number;
+    // Get valid resolutions for new aspect
+    const resolutions = computeValidResolutions(aspect.width, aspect.height);
+    if (resolutions.length === 0) return;
 
-    if (ratio >= 1) {
-      newWidth = sideLength;
-      newHeight = Math.round(sideLength / ratio / SIDE_LENGTH_STEP) * SIDE_LENGTH_STEP;
-    } else {
-      newHeight = sideLength;
-      newWidth = Math.round(sideLength * ratio / SIDE_LENGTH_STEP) * SIDE_LENGTH_STEP;
+    // Find resolution closest to current area
+    const currentArea = width * height;
+    let closest = resolutions[0];
+    let closestDiff = Infinity;
+    for (const [w, h] of resolutions) {
+      const diff = Math.abs(w * h - currentArea);
+      if (diff < closestDiff) {
+        closestDiff = diff;
+        closest = [w, h];
+      }
     }
 
-    newWidth = Math.max(SIDE_LENGTH_MIN, Math.min(SIDE_LENGTH_MAX, newWidth));
-    newHeight = Math.max(SIDE_LENGTH_MIN, Math.min(SIDE_LENGTH_MAX, newHeight));
-
-    onWidthChange(newWidth);
-    onHeightChange(newHeight);
+    onWidthChange(closest[0]);
+    onHeightChange(closest[1]);
   };
 
-  // Handle side length change (for preset aspects)
-  const handleSideLengthChange = (value: number[]) => {
-    const newSideLength = value[0];
-    const aspect = ASPECT_RATIOS.find((ar) => ar.value === selectedAspect);
-
-    if (!aspect || selectedAspect === "custom") return;
-
-    const ratio = aspect.width / aspect.height;
-    let newWidth: number;
-    let newHeight: number;
-
-    if (ratio >= 1) {
-      newWidth = newSideLength;
-      newHeight = Math.round(newSideLength / ratio / SIDE_LENGTH_STEP) * SIDE_LENGTH_STEP;
-    } else {
-      newHeight = newSideLength;
-      newWidth = Math.round(newSideLength * ratio / SIDE_LENGTH_STEP) * SIDE_LENGTH_STEP;
-    }
-
-    onWidthChange(Math.max(SIDE_LENGTH_MIN, newWidth));
-    onHeightChange(Math.max(SIDE_LENGTH_MIN, newHeight));
+  // Handle slider change - select from valid resolutions by index
+  const handleSliderChange = (value: number[]) => {
+    const index = value[0];
+    if (index < 0 || index >= validResolutions.length) return;
+    const [w, h] = validResolutions[index];
+    onWidthChange(w);
+    onHeightChange(h);
   };
 
   // Handle custom width/height input
@@ -203,7 +250,7 @@ export function ResolutionSelector({
                   <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Adjust the resolution</p>
+                  <p>Select from valid resolutions for this aspect ratio</p>
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -212,11 +259,11 @@ export function ResolutionSelector({
             </span>
           </div>
           <Slider
-            value={[sideLength]}
-            onValueChange={handleSideLengthChange}
-            min={SIDE_LENGTH_MIN}
-            max={SIDE_LENGTH_MAX}
-            step={SIDE_LENGTH_STEP}
+            value={[currentIndex]}
+            onValueChange={handleSliderChange}
+            min={0}
+            max={Math.max(0, validResolutions.length - 1)}
+            step={1}
             className="w-full"
           />
         </div>

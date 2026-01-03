@@ -134,54 +134,52 @@ export default function GeneratePage() {
                         step={0.5}
                       />
 
-                      {/* Sampler & Scheduler */}
-                      {samplerOptions.length > 0 && (
-                        <DropdownInput
-                          id="sampler"
-                          label="Sampler"
-                          description="Sampling algorithm"
-                          value={String(values.sampler || samplerOptions[0])}
-                          onChange={(v) => setValue("sampler", v)}
-                          options={samplerOptions}
-                        />
-                      )}
-                      {schedulerOptions.length > 0 && (
-                        <DropdownInput
-                          id="scheduler"
-                          label="Scheduler"
-                          description="Noise schedule"
-                          value={String(values.scheduler || schedulerOptions[0])}
-                          onChange={(v) => setValue("scheduler", v)}
-                          options={schedulerOptions}
-                        />
-                      )}
+                      {/* Sampler & Scheduler - 2 column */}
+                      <div className="grid grid-cols-2 gap-2">
+                        {samplerOptions.length > 0 && (
+                          <DropdownInput
+                            id="sampler"
+                            label="Sampler"
+                            value={String(values.sampler || samplerOptions[0])}
+                            onChange={(v) => setValue("sampler", v)}
+                            options={samplerOptions}
+                          />
+                        )}
+                        {schedulerOptions.length > 0 && (
+                          <DropdownInput
+                            id="scheduler"
+                            label="Scheduler"
+                            value={String(values.scheduler || schedulerOptions[0])}
+                            onChange={(v) => setValue("scheduler", v)}
+                            options={schedulerOptions}
+                          />
+                        )}
+                      </div>
 
-                      {/* Seed */}
-                      <NumberInput
-                        id="seed"
-                        label="Seed"
-                        description="Random seed (-1 for random)"
-                        value={Number(values.seed) ?? -1}
-                        onChange={(v) => setValue("seed", v)}
-                        min={-1}
-                        max={2147483647}
-                        showRandomize
-                        showReset
-                        defaultValue={-1}
-                      />
-
-                      {/* Images */}
-                      <NumberInput
-                        id="images"
-                        label="Images"
-                        description="Number of images to generate"
-                        value={Number(values.images) || 1}
-                        onChange={(v) => setValue("images", v)}
-                        min={1}
-                        max={100}
-                        showReset
-                        defaultValue={1}
-                      />
+                      {/* Seed & Images - 2 column */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <NumberInput
+                          id="seed"
+                          label="Seed"
+                          value={Number(values.seed) ?? -1}
+                          onChange={(v) => setValue("seed", v)}
+                          min={-1}
+                          max={2147483647}
+                          showRandomize
+                          showReset
+                          defaultValue={-1}
+                        />
+                        <NumberInput
+                          id="images"
+                          label="Images"
+                          value={Number(values.images) || 1}
+                          onChange={(v) => setValue("images", v)}
+                          min={1}
+                          max={100}
+                          showReset
+                          defaultValue={1}
+                        />
+                      </div>
 
                       {/* Generate Button */}
                       <div className="pt-1">

@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSessionStore } from "@/stores/session";
 import { listImages } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Toggle } from "@/components/ui/toggle";
+import { Slider } from "@/components/ui/slider";
 import {
   Dialog,
   DialogContent,
@@ -20,8 +22,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  FolderOpen,
-  ArrowUp,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Badge } from "@/components/ui/badge";
+import {
   RefreshCw,
   Search,
   Download,
@@ -29,12 +36,25 @@ import {
   ZoomIn,
   ChevronLeft,
   ChevronRight,
+  Star,
+  CalendarIcon,
+  X,
+  Grid3X3,
+  Loader2,
+  ArrowUpDown,
+  RectangleHorizontal,
+  RectangleVertical,
+  Square,
 } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import type { ImageMetadata } from "@/types/api";
 
 interface OutputImage {
   src: string;
-  metadata?: string | ImageMetadata;
+  fullPath: string;
+  metadata?: ImageMetadata;
+  date?: Date;
 }
 
 interface OutputBrowserProps {
@@ -42,74 +62,231 @@ interface OutputBrowserProps {
   onImageSelect?: (src: string, metadata?: ImageMetadata) => void;
 }
 
+type ThumbnailSize = "small" | "medium" | "large" | "xl" | "xxl";
+
+const sizeConfig: Record<ThumbnailSize, { cols: string }> = {
+  small: { cols: "grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10" },
+  medium: { cols: "grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6" },
+  large: { cols: "grid-cols-2 sm:grid-cols-3 md:grid-cols-4" },
+  xl: { cols: "grid-cols-1 sm:grid-cols-2 md:grid-cols-3" },
+  xxl: { cols: "grid-cols-1 sm:grid-cols-1 md:grid-cols-2" },
+};
+
+const orientationConfig: Record<"landscape" | "portrait" | "square", string> = {
+  landscape: "aspect-video",    // 16:9
+  portrait: "aspect-[9/16]",    // 9:16
+  square: "aspect-square",      // 1:1
+};
+
 export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) {
   const { sessionId } = useSessionStore();
-  const [currentPath, setCurrentPath] = useState("");
-  const [folders, setFolders] = useState<string[]>([]);
-  const [images, setImages] = useState<OutputImage[]>([]);
+
+  // Data state
+  const [allImages, setAllImages] = useState<OutputImage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState("");
+
+  // View state
+  const [thumbnailSize, setThumbnailSize] = useState<ThumbnailSize>("medium");
+  const [cardOrientation, setCardOrientation] = useState<"landscape" | "portrait" | "square">("square");
+
+  // Filter state
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<"name" | "date">("date");
-  const [sortReverse, setSortReverse] = useState(true);
+  const [starredOnly, setStarredOnly] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<string>("all");
+  const [selectedLora, setSelectedLora] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState<Date | undefined>();
+  const [dateTo, setDateTo] = useState<Date | undefined>();
+  const [sortBy, setSortBy] = useState<"date" | "name">("date");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+
+  // Full view state
   const [selectedImage, setSelectedImage] = useState<OutputImage | null>(null);
   const [fullViewOpen, setFullViewOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  // Load images from server
-  const loadImages = useCallback(async () => {
+  // Parse metadata from string or object
+  const parseMetadata = (meta?: string | ImageMetadata): ImageMetadata | undefined => {
+    if (!meta) return undefined;
+    if (typeof meta === "string") {
+      try {
+        return JSON.parse(meta);
+      } catch {
+        return undefined;
+      }
+    }
+    return meta;
+  };
+
+  // Load all images recursively
+  const loadAllImages = useCallback(async () => {
     if (!sessionId) return;
 
     setIsLoading(true);
+    setLoadingProgress("Loading images...");
+
     try {
+      // Load with high depth to get all nested images
       const response = await listImages(
         {
-          path: currentPath,
-          depth: 1,
-          sortBy,
-          sortReverse,
+          path: "",
+          depth: 10, // High depth to get nested folders
+          sortBy: "date",
+          sortReverse: true,
+          limit: 1000, // Reasonable limit
         },
         sessionId
       );
 
-      setFolders(response.folders || []);
-      setImages(
-        (response.files || []).map((f) => ({
-          src: f.src,
-          metadata: f.metadata,
-        }))
-      );
+      // Process and flatten images
+      const images: OutputImage[] = (response.files || []).map((f) => {
+        const metadata = parseMetadata(f.metadata);
+        // Try to extract date from metadata or filename
+        let date: Date | undefined;
+        if (metadata?.date) {
+          date = new Date(metadata.date as string);
+        } else {
+          // Try to parse date from filename (common format: YYYY-MM-DD or timestamp)
+          const dateMatch = f.src.match(/(\d{4}-\d{2}-\d{2})/);
+          if (dateMatch) {
+            date = new Date(dateMatch[1]);
+          }
+        }
+
+        return {
+          src: f.src.split("/").pop() || f.src, // Just the filename for display
+          fullPath: f.src, // Full path for loading
+          metadata,
+          date,
+        };
+      });
+
+      setAllImages(images);
+      setLoadingProgress(`Loaded ${images.length} images`);
     } catch (error) {
       console.error("Failed to load images:", error);
-      setFolders([]);
-      setImages([]);
+      setLoadingProgress("Failed to load images");
     } finally {
       setIsLoading(false);
     }
-  }, [sessionId, currentPath, sortBy, sortReverse]);
+  }, [sessionId]);
 
-  // Load on mount and when path/sort changes
+  // Load on mount
   useEffect(() => {
-    loadImages();
-  }, [loadImages]);
+    loadAllImages();
+  }, [loadAllImages]);
 
-  // Navigate to folder
-  const navigateToFolder = (folder: string) => {
-    setCurrentPath(currentPath ? `${currentPath}/${folder}` : folder);
+  // Helper to extract params from nested or flat metadata
+  const getParams = (meta?: ImageMetadata): Record<string, unknown> => {
+    if (!meta) return {};
+    return (meta.Sui_image_params || meta.sui_image_params || meta) as Record<string, unknown>;
   };
 
-  // Navigate up
-  const navigateUp = () => {
-    const parts = currentPath.split("/");
-    parts.pop();
-    setCurrentPath(parts.join("/"));
-  };
+  // Extract unique models from all images for filter dropdown
+  const availableModels = useMemo(() => {
+    const models = new Set<string>();
+    allImages.forEach((img) => {
+      const params = getParams(img.metadata);
+      const model = params.model || img.metadata?.model;
+      if (model) {
+        models.add(String(model));
+      }
+    });
+    return Array.from(models).sort();
+  }, [allImages]);
 
-  // Filter images by search
-  const filteredImages = searchQuery
-    ? images.filter((img) =>
-        img.src.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : images;
+  // Extract unique LoRAs from all images for filter dropdown
+  const availableLoras = useMemo(() => {
+    const loras = new Set<string>();
+    allImages.forEach((img) => {
+      const params = getParams(img.metadata);
+      const loraList = params.loras as string[] | undefined;
+      if (loraList && Array.isArray(loraList)) {
+        loraList.forEach((lora) => loras.add(lora));
+      }
+    });
+    return Array.from(loras).sort();
+  }, [allImages]);
+
+  // Filter and sort images
+  const filteredImages = useMemo(() => {
+    // First filter
+    const filtered = allImages.filter((img) => {
+      const params = getParams(img.metadata);
+
+      // Search filter - check filename and prompt
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesFilename = img.src.toLowerCase().includes(query);
+        const prompt = String(params.prompt || img.metadata?.prompt || "");
+        const negative = String(params.negativeprompt || img.metadata?.negativeprompt || "");
+        const matchesPrompt = prompt.toLowerCase().includes(query);
+        const matchesNegative = negative.toLowerCase().includes(query);
+        if (!matchesFilename && !matchesPrompt && !matchesNegative) {
+          return false;
+        }
+      }
+
+      // Starred filter - check multiple locations
+      if (starredOnly) {
+        const extraData = (img.metadata?.Sui_extra_data || img.metadata?.sui_extra_data || {}) as Record<string, unknown>;
+        const isStarred = img.metadata?.starred ||
+                          extraData.starred ||
+                          img.fullPath.toLowerCase().includes("starred");
+        if (!isStarred) {
+          return false;
+        }
+      }
+
+      // Model filter
+      if (selectedModel !== "all") {
+        const model = String(params.model || img.metadata?.model || "");
+        if (model !== selectedModel) {
+          return false;
+        }
+      }
+
+      // LoRA filter
+      if (selectedLora !== "all") {
+        const loraList = params.loras as string[] | undefined;
+        if (!loraList || !Array.isArray(loraList) || !loraList.includes(selectedLora)) {
+          return false;
+        }
+      }
+
+      // Date range filter
+      if (dateFrom && img.date && img.date < dateFrom) {
+        return false;
+      }
+      if (dateTo && img.date && img.date > dateTo) {
+        return false;
+      }
+
+      return true;
+    });
+
+    // Then sort
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      if (sortBy === "date") {
+        const dateA = a.date?.getTime() || 0;
+        const dateB = b.date?.getTime() || 0;
+        comparison = dateA - dateB;
+        // Secondary sort by name when dates are equal
+        if (comparison === 0) {
+          comparison = a.src.localeCompare(b.src);
+        }
+      } else {
+        comparison = a.src.localeCompare(b.src);
+      }
+      return sortOrder === "asc" ? comparison : -comparison;
+    });
+
+    return filtered;
+  }, [allImages, searchQuery, starredOnly, selectedModel, selectedLora, dateFrom, dateTo, sortBy, sortOrder]);
+
+  // Build image URL
+  const getImageUrl = (fullPath: string) => `/Output/${fullPath}`;
 
   // Open image in full view
   const openFullView = (image: OutputImage, index: number) => {
@@ -141,28 +318,15 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [fullViewOpen, selectedIndex, filteredImages.length]);
 
-  // Parse metadata
-  const parseMetadata = (meta?: string | ImageMetadata): ImageMetadata | undefined => {
-    if (!meta) return undefined;
-    if (typeof meta === "string") {
-      try {
-        return JSON.parse(meta);
-      } catch {
-        return undefined;
-      }
-    }
-    return meta;
-  };
-
   // Download image
   const handleDownload = async (image: OutputImage) => {
     try {
-      const response = await fetch(`/${image.src}`);
+      const response = await fetch(getImageUrl(image.fullPath));
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = image.src.split("/").pop() || "image.png";
+      a.download = image.src;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -172,146 +336,295 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
     }
   };
 
-  // Copy metadata/prompt
+  // Copy prompt
   const handleCopyPrompt = (image: OutputImage) => {
-    const metadata = parseMetadata(image.metadata);
-    if (metadata?.prompt) {
-      navigator.clipboard.writeText(String(metadata.prompt));
+    if (image.metadata?.prompt) {
+      navigator.clipboard.writeText(String(image.metadata.prompt));
     }
   };
 
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchQuery("");
+    setStarredOnly(false);
+    setSelectedModel("all");
+    setSelectedLora("all");
+    setDateFrom(undefined);
+    setDateTo(undefined);
+  };
+
+  const hasActiveFilters = searchQuery || starredOnly || selectedModel !== "all" || selectedLora !== "all" || dateFrom || dateTo;
+
   return (
-    <div className={`flex flex-col h-full ${className}`}>
-      {/* Header */}
-      <div className="flex items-center gap-2 p-3 border-b">
-        {/* Path navigation */}
-        <div className="flex items-center gap-1">
+    <div className={cn("flex flex-col h-full", className)}>
+      {/* Filter Bar */}
+      <div className="space-y-2 p-3 border-b shrink-0">
+        {/* Row 1: Search and Size */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search prompts, filenames..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 h-8"
+            />
+          </div>
+
+          {/* Thumbnail size */}
+          <div className="flex items-center gap-0.5 border rounded-md p-1">
+            <Grid3X3 className="h-4 w-4 text-muted-foreground mx-1" />
+            {([
+              { key: "small", label: "S" },
+              { key: "medium", label: "M" },
+              { key: "large", label: "L" },
+              { key: "xl", label: "XL" },
+              { key: "xxl", label: "XXL" },
+            ] as { key: ThumbnailSize; label: string }[]).map(({ key, label }) => (
+              <Button
+                key={key}
+                variant={thumbnailSize === key ? "secondary" : "ghost"}
+                size="sm"
+                className="h-6 px-1.5 text-xs"
+                onClick={() => setThumbnailSize(key)}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+
+          {/* Card orientation */}
+          <div className="flex items-center gap-0.5 border rounded-md p-1">
+            {([
+              { key: "landscape", icon: RectangleHorizontal, title: "Landscape" },
+              { key: "square", icon: Square, title: "Square" },
+              { key: "portrait", icon: RectangleVertical, title: "Portrait" },
+            ] as { key: "landscape" | "portrait" | "square"; icon: typeof Square; title: string }[]).map(({ key, icon: Icon, title }) => (
+              <Button
+                key={key}
+                variant={cardOrientation === key ? "secondary" : "ghost"}
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={() => setCardOrientation(key)}
+                title={title}
+              >
+                <Icon className="h-4 w-4" />
+              </Button>
+            ))}
+          </div>
+
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon"
-            className="h-8 w-8"
-            onClick={navigateUp}
-            disabled={!currentPath}
+            className="h-8 w-8 shrink-0"
+            onClick={loadAllImages}
+            disabled={isLoading}
           >
-            <ArrowUp className="h-4 w-4" />
+            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
           </Button>
-          <span className="text-sm text-muted-foreground truncate max-w-[200px]">
-            /{currentPath || "Output"}
+        </div>
+
+        {/* Row 2: Filters */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Starred toggle */}
+          <Toggle
+            pressed={starredOnly}
+            onPressedChange={setStarredOnly}
+            size="sm"
+            className="h-8 px-2 data-[state=on]:bg-yellow-500/20 data-[state=on]:text-yellow-600"
+          >
+            <Star className={cn("h-4 w-4 mr-1", starredOnly && "fill-current")} />
+            Starred
+          </Toggle>
+
+          {/* Model filter */}
+          <Select value={selectedModel} onValueChange={setSelectedModel}>
+            <SelectTrigger className="h-8 w-[280px]">
+              <SelectValue placeholder="All models" />
+            </SelectTrigger>
+            <SelectContent className="max-w-[400px]">
+              <SelectItem value="all">All models</SelectItem>
+              {availableModels.map((model) => (
+                <SelectItem key={model} value={model} title={model}>
+                  {model}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* LoRA filter */}
+          {availableLoras.length > 0 && (
+            <Select value={selectedLora} onValueChange={setSelectedLora}>
+              <SelectTrigger className="h-8 w-[220px]">
+                <SelectValue placeholder="All LoRAs" />
+              </SelectTrigger>
+              <SelectContent className="max-w-[350px]">
+                <SelectItem value="all">All LoRAs</SelectItem>
+                {availableLoras.map((lora) => (
+                  <SelectItem key={lora} value={lora} title={lora}>
+                    {lora}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {/* Date from */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 px-2">
+                <CalendarIcon className="h-4 w-4 mr-1" />
+                {dateFrom ? format(dateFrom, "MMM d") : "From"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={dateFrom}
+                onSelect={setDateFrom}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+
+          {/* Date to */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 px-2">
+                <CalendarIcon className="h-4 w-4 mr-1" />
+                {dateTo ? format(dateTo, "MMM d") : "To"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={dateTo}
+                onSelect={setDateTo}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+
+          {/* Sort */}
+          <Select
+            value={`${sortBy}-${sortOrder}`}
+            onValueChange={(v) => {
+              const [by, order] = v.split("-") as ["date" | "name", "asc" | "desc"];
+              setSortBy(by);
+              setSortOrder(order);
+            }}
+          >
+            <SelectTrigger className="h-8 w-[130px]">
+              <ArrowUpDown className="h-3 w-3 mr-1" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="date-desc">Newest first</SelectItem>
+              <SelectItem value="date-asc">Oldest first</SelectItem>
+              <SelectItem value="name-asc">Name A-Z</SelectItem>
+              <SelectItem value="name-desc">Name Z-A</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Clear filters */}
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-muted-foreground"
+              onClick={clearFilters}
+            >
+              <X className="h-4 w-4 mr-1" />
+              Clear
+            </Button>
+          )}
+
+          {/* Results count */}
+          <span className="text-xs text-muted-foreground ml-auto">
+            {filteredImages.length} of {allImages.length} images
           </span>
         </div>
-
-        {/* Search */}
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8 h-8"
-          />
-        </div>
-
-        {/* Sort */}
-        <Select value={sortBy} onValueChange={(v) => setSortBy(v as "name" | "date")}>
-          <SelectTrigger className="w-24 h-8">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="date">Date</SelectItem>
-            <SelectItem value="name">Name</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Refresh */}
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8"
-          onClick={loadImages}
-          disabled={isLoading}
-        >
-          <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-        </Button>
       </div>
 
-      {/* Content */}
+      {/* Image Grid */}
       <ScrollArea className="flex-1">
-        <div className="p-3 space-y-3">
-          {/* Folders */}
-          {folders.length > 0 && (
-            <div className="space-y-1">
-              {folders.map((folder) => (
-                <Button
-                  key={folder}
-                  variant="ghost"
-                  className="w-full justify-start h-9"
-                  onClick={() => navigateToFolder(folder)}
-                >
-                  <FolderOpen className="h-4 w-4 mr-2 text-muted-foreground" />
-                  {folder}
-                </Button>
-              ))}
+        <div className="p-3">
+          {isLoading && allImages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <Loader2 className="h-8 w-8 animate-spin mb-2" />
+              <p>{loadingProgress}</p>
             </div>
-          )}
-
-          {/* Images grid */}
-          {filteredImages.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-              {filteredImages.map((image, idx) => {
-                const metadata = parseMetadata(image.metadata);
-                return (
-                  <div
-                    key={image.src}
-                    className="group relative aspect-square rounded-md overflow-hidden bg-muted cursor-pointer"
-                    onClick={() => {
-                      if (onImageSelect) {
-                        onImageSelect(image.src, metadata);
-                      } else {
-                        openFullView(image, idx);
-                      }
-                    }}
-                  >
+          ) : filteredImages.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              {hasActiveFilters ? "No images match your filters" : "No images found"}
+            </div>
+          ) : (
+            <div className={cn("grid gap-2", sizeConfig[thumbnailSize].cols)}>
+              {filteredImages.map((image, idx) => (
+                <div
+                  key={image.fullPath}
+                  className={cn(
+                    "group relative rounded-md overflow-hidden bg-muted cursor-pointer",
+                    orientationConfig[cardOrientation]
+                  )}
+                  onClick={() => {
+                    if (onImageSelect) {
+                      onImageSelect(image.fullPath, image.metadata);
+                    } else {
+                      openFullView(image, idx);
+                    }
+                  }}
+                >
+                  {/* Image with aspect ratio preserved */}
+                  <div className="absolute inset-0 flex items-center justify-center">
                     <img
-                      src={`/${image.src}`}
+                      src={getImageUrl(image.fullPath)}
                       alt={image.src}
-                      className="w-full h-full object-cover"
+                      className="max-w-full max-h-full object-contain"
                       loading="lazy"
                     />
-                    {/* Hover overlay */}
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openFullView(image, idx);
-                        }}
-                      >
-                        <ZoomIn className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDownload(image);
-                        }}
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                    </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
 
-          {/* Empty state */}
-          {!isLoading && folders.length === 0 && images.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              No images in this folder
+                  {/* Starred indicator */}
+                  {(() => {
+                    const extraData = (image.metadata?.Sui_extra_data || image.metadata?.sui_extra_data || {}) as Record<string, unknown>;
+                    const isStarred = image.metadata?.starred ||
+                                      extraData.starred ||
+                                      image.fullPath.toLowerCase().includes("starred");
+                    return isStarred ? (
+                      <div className="absolute top-1 right-1">
+                        <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
+                      </div>
+                    ) : null;
+                  })()}
+
+                  {/* Hover overlay */}
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openFullView(image, idx);
+                      }}
+                    >
+                      <ZoomIn className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownload(image);
+                      }}
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -328,7 +641,7 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
               {/* Image */}
               <div className="flex-1 flex items-center justify-center bg-black/95 relative">
                 <img
-                  src={`/${selectedImage.src}`}
+                  src={getImageUrl(selectedImage.fullPath)}
                   alt="Full view"
                   className="max-w-full max-h-[90vh] object-contain"
                 />
@@ -353,58 +666,179 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
                     <ChevronRight className="h-6 w-6" />
                   </Button>
                 )}
+                {/* Image counter */}
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 px-3 py-1 rounded-full text-white text-sm">
+                  {selectedIndex + 1} / {filteredImages.length}
+                </div>
               </div>
 
               {/* Metadata panel */}
-              <div className="w-full lg:w-80 bg-background border-l flex flex-col shrink-0">
-                <div className="p-4 border-b">
+              <div className="w-full lg:w-96 bg-background border-l flex flex-col shrink-0 max-h-[90vh] overflow-hidden">
+                <div className="p-4 border-b shrink-0">
                   <h2 className="font-semibold">Image Details</h2>
                   <p className="text-xs text-muted-foreground truncate">
-                    {selectedImage.src}
+                    {selectedImage.fullPath}
                   </p>
                 </div>
 
-                {/* Actions */}
-                <div className="flex gap-2 p-4 border-b">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDownload(selectedImage)}
-                  >
-                    <Download className="h-4 w-4 mr-1" />
-                    Download
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleCopyPrompt(selectedImage)}
-                  >
-                    <Copy className="h-4 w-4 mr-1" />
-                    Copy Prompt
-                  </Button>
-                </div>
-
-                {/* Metadata */}
-                <ScrollArea className="flex-1 p-4">
-                  <div className="space-y-3 text-sm">
+                {/* Scrollable content */}
+                <div className="flex-1 overflow-y-auto min-h-0">
+                  <div className="p-4 space-y-4">
                     {(() => {
-                      const metadata = parseMetadata(selectedImage.metadata);
-                      if (!metadata) {
-                        return (
-                          <p className="text-muted-foreground">No metadata available</p>
-                        );
+                      const meta = selectedImage.metadata;
+                      if (!meta) {
+                        return <p className="text-muted-foreground">No metadata available</p>;
                       }
-                      return Object.entries(metadata).map(([key, value]) => (
-                        <div key={key} className="space-y-1">
-                          <span className="font-medium text-muted-foreground capitalize text-xs">
-                            {key}
-                          </span>
-                          <p className="break-words">{String(value)}</p>
-                        </div>
-                      ));
+
+                      // Extract params from nested structure or flat structure
+                      const params = (meta.Sui_image_params || meta.sui_image_params || meta) as Record<string, unknown>;
+                      const extraData = (meta.Sui_extra_data || meta.sui_extra_data || {}) as Record<string, unknown>;
+
+                      const prompt = String(params.prompt || meta.prompt || "");
+                      const negativePrompt = String(params.negativeprompt || meta.negativeprompt || "");
+                      const model = String(params.model || meta.model || "");
+                      const seed = params.seed ?? meta.seed;
+                      const steps = params.steps ?? meta.steps;
+                      const cfg = params.cfgscale ?? meta.cfgscale;
+                      const width = params.width ?? meta.width;
+                      const height = params.height ?? meta.height;
+                      const sampler = params.sampler ?? meta.sampler;
+                      const date = extraData.date || meta.date;
+                      const loras = (params.loras || []) as string[];
+                      const loraWeights = (params.loraweights || []) as string[];
+
+                      return (
+                        <>
+                          {/* Prompt */}
+                          {prompt && (
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-muted-foreground">Prompt</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2"
+                                  onClick={() => navigator.clipboard.writeText(prompt)}
+                                >
+                                  <Copy className="h-3 w-3 mr-1" />
+                                  Copy
+                                </Button>
+                              </div>
+                              <p className="text-sm bg-muted p-2 rounded break-words max-h-32 overflow-y-auto">
+                                {prompt}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Negative Prompt */}
+                          {negativePrompt && (
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-muted-foreground">Negative Prompt</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2"
+                                  onClick={() => navigator.clipboard.writeText(negativePrompt)}
+                                >
+                                  <Copy className="h-3 w-3 mr-1" />
+                                  Copy
+                                </Button>
+                              </div>
+                              <p className="text-sm bg-muted p-2 rounded break-words max-h-24 overflow-y-auto">
+                                {negativePrompt}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Key parameters grid */}
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            {model && (
+                              <div className="col-span-2 space-y-0.5">
+                                <span className="text-xs text-muted-foreground">Model</span>
+                                <p className="font-medium truncate" title={model}>{model}</p>
+                              </div>
+                            )}
+                            {loras.length > 0 && (
+                              <div className="col-span-2 space-y-0.5">
+                                <span className="text-xs text-muted-foreground">LoRAs</span>
+                                <div className="space-y-1">
+                                  {loras.map((lora, i) => (
+                                    <div key={lora} className="flex items-center justify-between bg-muted px-2 py-1 rounded text-xs">
+                                      <span className="truncate" title={lora}>{lora}</span>
+                                      <span className="text-muted-foreground ml-2 shrink-0">
+                                        {loraWeights[i] || "1"}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {seed !== undefined && (
+                              <div className="space-y-0.5">
+                                <span className="text-xs text-muted-foreground">Seed</span>
+                                <p className="font-mono">{String(seed)}</p>
+                              </div>
+                            )}
+                            {steps !== undefined && (
+                              <div className="space-y-0.5">
+                                <span className="text-xs text-muted-foreground">Steps</span>
+                                <p>{String(steps)}</p>
+                              </div>
+                            )}
+                            {cfg !== undefined && (
+                              <div className="space-y-0.5">
+                                <span className="text-xs text-muted-foreground">CFG Scale</span>
+                                <p>{String(cfg)}</p>
+                              </div>
+                            )}
+                            {Boolean(sampler) && (
+                              <div className="space-y-0.5">
+                                <span className="text-xs text-muted-foreground">Sampler</span>
+                                <p>{String(sampler)}</p>
+                              </div>
+                            )}
+                            {Boolean(width || height) && (
+                              <div className="space-y-0.5">
+                                <span className="text-xs text-muted-foreground">Size</span>
+                                <p>{String(width)}×{String(height)}</p>
+                              </div>
+                            )}
+                            {Boolean(date) && (
+                              <div className="space-y-0.5">
+                                <span className="text-xs text-muted-foreground">Date</span>
+                                <p>{String(date)}</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex gap-2 pt-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => handleDownload(selectedImage)}
+                            >
+                              <Download className="h-4 w-4 mr-1" />
+                              Download
+                            </Button>
+                          </div>
+
+                          {/* Raw metadata (collapsible) */}
+                          <details className="text-xs">
+                            <summary className="cursor-pointer text-muted-foreground hover:text-foreground py-2">
+                              Show raw metadata
+                            </summary>
+                            <pre className="bg-muted p-2 rounded overflow-x-auto whitespace-pre-wrap break-words text-xs mt-2">
+                              {JSON.stringify(meta, null, 2)}
+                            </pre>
+                          </details>
+                        </>
+                      );
                     })()}
                   </div>
-                </ScrollArea>
+                </div>
               </div>
             </div>
           )}

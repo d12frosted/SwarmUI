@@ -23,7 +23,6 @@ interface TextInputProps {
   rows?: number;
   showTokenCount?: boolean;
   tokenCount?: number;
-  maxTokens?: number;
 }
 
 export function TextInput({
@@ -37,10 +36,7 @@ export function TextInput({
   rows = 3,
   showTokenCount = false,
   tokenCount,
-  maxTokens = 77,
 }: TextInputProps) {
-  const isOverLimit = tokenCount !== undefined && tokenCount > maxTokens;
-
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
@@ -62,8 +58,8 @@ export function TextInput({
           )}
         </div>
         {showTokenCount && tokenCount !== undefined && (
-          <Badge variant={isOverLimit ? "destructive" : "secondary"} className="text-xs">
-            {tokenCount}/{maxTokens} tokens
+          <Badge variant="secondary" className="text-xs">
+            {tokenCount} tokens
           </Badge>
         )}
       </div>

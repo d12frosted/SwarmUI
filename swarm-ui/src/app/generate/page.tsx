@@ -1,21 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { useSessionStore } from "@/stores/session";
-import { useStatusStore } from "@/stores/status";
 import { useParametersStore } from "@/stores/parameters";
+import { MainLayout } from "@/components/layout";
 import { ParameterPanel, TextInput, ResolutionSelector, SliderInput, NumberInput, DropdownInput } from "@/components/parameters";
 import { ModelSelector } from "@/components/models/ModelSelector";
+import { LoraManager } from "@/components/loras";
+import { QuickPresetSelector } from "@/components/presets";
 import { GenerateButton, ImageResult, BatchHistory } from "@/components/generation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { useTokenCount } from "@/hooks";
 import type { GeneratedImage } from "@/types/api";
 
 export default function GeneratePage() {
-  const { isLoading, isInitialized } = useSessionStore();
-  const { waitingGens, liveGens, loadingModels } = useStatusStore();
   const { values, setValue, paramTypes } = useParametersStore();
 
   // Get dropdown options from param types
@@ -27,17 +25,6 @@ export default function GeneratePage() {
   const promptTokens = useTokenCount(String(values.prompt || ""));
   const negativePromptTokens = useTokenCount(String(values.negativeprompt || ""));
 
-  if (isLoading || !isInitialized) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Connecting to SwarmUI...</p>
-        </div>
-      </div>
-    );
-  }
-
   const handleImageGenerated = (image: GeneratedImage) => {
     // Auto-select the latest image
     setSelectedBatchIndex(undefined);
@@ -48,27 +35,9 @@ export default function GeneratePage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-card">
-        <div className="flex items-center justify-between h-12 px-4">
-          <h1 className="text-lg font-bold">SwarmUI</h1>
-          <div className="flex items-center gap-2">
-            {loadingModels > 0 && (
-              <Badge variant="secondary">Loading model...</Badge>
-            )}
-            {liveGens > 0 && (
-              <Badge variant="default">{liveGens} generating</Badge>
-            )}
-            {waitingGens > 0 && (
-              <Badge variant="outline">{waitingGens} queued</Badge>
-            )}
-          </div>
-        </div>
-      </header>
-
+    <MainLayout>
       {/* Main Content - 3 column layout */}
-      <div className="px-3 py-3 h-[calc(100vh-3rem)] overflow-hidden">
+      <div className="px-3 py-3 h-full overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 h-full">
           {/* Left Panel - Parameters */}
           <div className="lg:col-span-3 h-full overflow-hidden">
@@ -79,6 +48,7 @@ export default function GeneratePage() {
                     <TabsTrigger value="main" className="text-xs px-3 h-7">Core</TabsTrigger>
                     <TabsTrigger value="all" className="text-xs px-3 h-7">Advanced</TabsTrigger>
                   </TabsList>
+                  <QuickPresetSelector />
                 </div>
                 <TabsContent value="main" className="flex-1 overflow-auto m-0">
                   <div className="flex flex-col p-3 space-y-4">
@@ -110,6 +80,9 @@ export default function GeneratePage() {
 
                       {/* Model Selector */}
                       <ModelSelector />
+
+                      {/* LoRA Manager */}
+                      <LoraManager />
 
                       {/* Resolution Selector */}
                       <ResolutionSelector
@@ -230,6 +203,6 @@ export default function GeneratePage() {
           </div>
         </div>
       </div>
-    </div>
+    </MainLayout>
   );
 }

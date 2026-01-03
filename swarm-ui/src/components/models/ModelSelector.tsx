@@ -7,7 +7,6 @@ import { useParametersStore } from "@/stores/parameters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -114,7 +113,7 @@ export function ModelSelector({ onModelSelect }: ModelSelectorProps) {
           </div>
 
           {/* Model List */}
-          <ScrollArea className="flex-1 -mx-6 px-6">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
             <div className="grid gap-2 py-2">
               {filteredModels.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">
@@ -132,7 +131,7 @@ export function ModelSelector({ onModelSelect }: ModelSelectorProps) {
                 ))
               )}
             </div>
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

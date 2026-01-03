@@ -55,7 +55,7 @@ export function SelectedLoraItem({ lora }: SelectedLoraItemProps) {
       {/* Weight slider */}
       <div className="flex items-center gap-1 flex-1 min-w-[100px]">
         <Slider
-          value={[lora.weight]}
+          value={[Number.isNaN(lora.weight) ? 1 : lora.weight]}
           onValueChange={([v]) => setWeight(lora.name, v)}
           min={-2}
           max={2}
@@ -64,8 +64,8 @@ export function SelectedLoraItem({ lora }: SelectedLoraItemProps) {
         />
         <Input
           type="number"
-          value={lora.weight}
-          onChange={(e) => setWeight(lora.name, parseFloat(e.target.value) || 0)}
+          value={Number.isNaN(lora.weight) ? 1 : lora.weight}
+          onChange={(e) => setWeight(lora.name, parseFloat(e.target.value) || 1)}
           className="w-14 h-7 text-xs text-center"
           step={0.05}
           min={-2}

@@ -6,7 +6,6 @@ import { useLoraStore } from "@/stores/loras";
 import { SelectedLoraItem } from "./SelectedLoraItem";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -15,7 +14,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Card, CardContent } from "@/components/ui/card";
 import { Search, Plus, RefreshCw, Trash2, Check } from "lucide-react";
 
 interface LoraManagerProps {
@@ -104,9 +102,9 @@ export function LoraManager({ className }: LoraManagerProps) {
                 </Button>
               </div>
 
-              {/* LoRA grid */}
-              <ScrollArea className="flex-1 max-h-[400px]">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 p-1">
+              {/* LoRA list */}
+              <div className="flex-1 min-h-0 overflow-y-auto border rounded-md">
+                <div className="divide-y">
                   {filteredLoras.map((lora) => {
                     const selected = isSelected(lora.name);
                     const displayName = lora.name.includes("/")
@@ -114,58 +112,67 @@ export function LoraManager({ className }: LoraManagerProps) {
                       : lora.name;
 
                     return (
-                      <Card
+                      <div
                         key={lora.name}
-                        className={`cursor-pointer transition-all hover:ring-2 hover:ring-primary/50 ${
-                          selected ? "ring-2 ring-primary bg-primary/5" : ""
+                        className={`flex items-center gap-3 p-2 cursor-pointer hover:bg-muted/50 transition-colors ${
+                          selected ? "bg-primary/10" : ""
                         }`}
                         onClick={() => toggleLora(lora)}
                       >
-                        <CardContent className="p-2">
-                          <div className="flex items-start gap-2">
-                            {/* Preview image */}
-                            {lora.preview_image ? (
-                              <img
-                                src={lora.preview_image}
-                                alt={displayName}
-                                className="w-12 h-12 rounded object-cover shrink-0"
-                              />
-                            ) : (
-                              <div className="w-12 h-12 rounded bg-muted flex items-center justify-center shrink-0">
-                                <span className="text-xs text-muted-foreground">No img</span>
-                              </div>
-                            )}
+                        {/* Checkbox indicator */}
+                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${
+                          selected ? "bg-primary border-primary" : "border-muted-foreground/30"
+                        }`}>
+                          {selected && <Check className="h-3 w-3 text-primary-foreground" />}
+                        </div>
 
-                            {/* Info */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between gap-1">
-                                <span className="text-sm font-medium truncate">
-                                  {displayName.replace(/\.safetensors$/i, "")}
-                                </span>
-                                {selected && (
-                                  <Check className="h-4 w-4 text-primary shrink-0" />
-                                )}
-                              </div>
-                              {lora.trigger_phrase && (
-                                <p className="text-xs text-muted-foreground truncate">
-                                  Trigger: {lora.trigger_phrase}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
+                        {/* Preview image */}
+                        <div className="w-10 h-10 rounded bg-muted shrink-0 overflow-hidden flex items-center justify-center">
+                          {lora.preview_image ? (
+                            <img
+                              src={lora.preview_image}
+                              alt={displayName}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">LoRA</span>
+                          )}
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate" title={lora.name}>
+                            {displayName.replace(/\.safetensors$/i, "")}
+                          </p>
+                          {lora.trigger_phrase && (
+                            <p className="text-xs text-muted-foreground truncate" title={lora.trigger_phrase}>
+                              <span className="font-medium">Trigger:</span>{" "}
+                              <code className="bg-muted px-1 rounded">{lora.trigger_phrase}</code>
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Default weight hint */}
+                        {lora.lora_default_weight && (
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            w:{lora.lora_default_weight}
+                          </span>
+                        )}
+                      </div>
                     );
                   })}
 
                   {/* Empty state */}
                   {filteredLoras.length === 0 && (
-                    <div className="col-span-full text-center py-8 text-muted-foreground">
+                    <div className="text-center py-8 text-muted-foreground">
                       {searchQuery ? "No LoRAs match your search" : "No LoRAs available"}
                     </div>
                   )}
                 </div>
-              </ScrollArea>
+              </div>
 
               {/* Selected count */}
               {selectedLoras.length > 0 && (

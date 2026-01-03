@@ -1,14 +1,24 @@
 "use client";
 
+import { useState } from "react";
 import { useSessionStore } from "@/stores/session";
 import { useStatusStore } from "@/stores/status";
+import { useParametersStore } from "@/stores/parameters";
+import { ParameterPanel } from "@/components/parameters";
+import { ModelSelector } from "@/components/models/ModelSelector";
+import { GenerateButton, ImageResult, BatchHistory } from "@/components/generation";
+import { TextInput } from "@/components/parameters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import type { GeneratedImage } from "@/types/api";
 
 export default function GeneratePage() {
-  const { sessionId, userId, version, isLoading, isInitialized } = useSessionStore();
-  const { waitingGens, liveGens, loadingModels, supportedFeatures } = useStatusStore();
+  const { isLoading, isInitialized } = useSessionStore();
+  const { waitingGens, liveGens, loadingModels } = useStatusStore();
+  const { values, setValue } = useParametersStore();
+  const [selectedBatchIndex, setSelectedBatchIndex] = useState<number | undefined>();
 
   if (isLoading || !isInitialized) {
     return (
@@ -21,97 +31,124 @@ export default function GeneratePage() {
     );
   }
 
+  const handleImageGenerated = (image: GeneratedImage) => {
+    // Auto-select the latest image
+    setSelectedBatchIndex(undefined);
+  };
+
+  const handleBatchImageSelect = (image: GeneratedImage, index: number) => {
+    setSelectedBatchIndex(index);
+  };
+
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold">SwarmUI</h1>
-          <p className="text-muted-foreground">Next.js Frontend - Phase 1 Complete</p>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Session Info</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Session ID:</span>
-                <code className="text-xs bg-muted px-2 py-1 rounded">
-                  {sessionId?.slice(0, 16)}...
-                </code>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">User ID:</span>
-                <span>{userId || "Anonymous"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Server Version:</span>
-                <span>{version || "Unknown"}</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Server Status</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Waiting:</span>
-                <Badge variant={waitingGens > 0 ? "default" : "secondary"}>
-                  {waitingGens}
-                </Badge>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Generating:</span>
-                <Badge variant={liveGens > 0 ? "default" : "secondary"}>
-                  {liveGens}
-                </Badge>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Loading Models:</span>
-                <Badge variant={loadingModels > 0 ? "default" : "secondary"}>
-                  {loadingModels}
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Supported Features</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {supportedFeatures.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {supportedFeatures.map((feature) => (
-                  <Badge key={feature} variant="outline">
-                    {feature}
-                  </Badge>
-                ))}
-              </div>
-            ) : (
-              <p className="text-muted-foreground">
-                No features loaded yet. Make sure the SwarmUI backend is running on port 7801.
-              </p>
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b bg-card">
+        <div className="container flex items-center justify-between h-14 px-4">
+          <h1 className="text-xl font-bold">SwarmUI</h1>
+          <div className="flex items-center gap-2">
+            {loadingModels > 0 && (
+              <Badge variant="secondary">Loading model...</Badge>
             )}
-          </CardContent>
-        </Card>
+            {liveGens > 0 && (
+              <Badge variant="default">{liveGens} generating</Badge>
+            )}
+            {waitingGens > 0 && (
+              <Badge variant="outline">{waitingGens} queued</Badge>
+            )}
+          </div>
+        </div>
+      </header>
 
-        <Separator />
+      {/* Main Content */}
+      <div className="container px-4 py-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-[calc(100vh-7rem)]">
+          {/* Left Panel - Parameters */}
+          <div className="lg:col-span-3 flex flex-col gap-4 overflow-hidden">
+            <Card className="flex-1 flex flex-col overflow-hidden">
+              <CardHeader className="py-3 px-4">
+                <CardTitle className="text-base">Parameters</CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 p-0 overflow-hidden">
+                <Tabs defaultValue="main" className="h-full flex flex-col">
+                  <TabsList className="mx-4 mb-2">
+                    <TabsTrigger value="main">Main</TabsTrigger>
+                    <TabsTrigger value="all">All</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="main" className="flex-1 overflow-hidden m-0">
+                    <div className="h-full flex flex-col px-4 pb-4 space-y-4">
+                      {/* Prompt */}
+                      <TextInput
+                        id="prompt"
+                        label="Prompt"
+                        description="Describe what you want to generate"
+                        value={String(values.prompt || "")}
+                        onChange={(v) => setValue("prompt", v)}
+                        placeholder="A beautiful sunset over mountains..."
+                        rows={4}
+                      />
 
-        <div className="text-center text-sm text-muted-foreground">
-          <p>Phase 1 Foundation Complete:</p>
-          <ul className="mt-2 space-y-1">
-            <li>Next.js 14+ with TypeScript</li>
-            <li>Tailwind CSS + shadcn/ui</li>
-            <li>API client with proxy to backend</li>
-            <li>WebSocket client with reconnection</li>
-            <li>Zustand stores (session, status, generation)</li>
-            <li>Authentication flow</li>
-          </ul>
+                      {/* Negative Prompt */}
+                      <TextInput
+                        id="negativeprompt"
+                        label="Negative Prompt"
+                        description="Describe what you want to avoid"
+                        value={String(values.negativeprompt || "")}
+                        onChange={(v) => setValue("negativeprompt", v)}
+                        placeholder="blurry, low quality..."
+                        rows={2}
+                      />
+
+                      {/* Model Selector */}
+                      <ModelSelector />
+
+                      {/* Generate Button */}
+                      <div className="mt-auto pt-2">
+                        <GenerateButton onImageGenerated={handleImageGenerated} />
+                      </div>
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="all" className="flex-1 overflow-hidden m-0">
+                    <ParameterPanel />
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Center Panel - Image Result */}
+          <div className="lg:col-span-6 flex flex-col gap-4">
+            <Card className="flex-1 flex flex-col overflow-hidden">
+              <CardHeader className="py-3 px-4">
+                <CardTitle className="text-base">Result</CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 p-4 pt-0 overflow-hidden">
+                <ImageResult className="h-full" />
+              </CardContent>
+            </Card>
+
+            {/* Batch History */}
+            <Card>
+              <CardContent className="p-4">
+                <BatchHistory
+                  onImageSelect={handleBatchImageSelect}
+                  selectedIndex={selectedBatchIndex}
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right Panel - Additional Options */}
+          <div className="lg:col-span-3 flex flex-col gap-4">
+            <Card className="flex-1 overflow-hidden">
+              <CardHeader className="py-3 px-4">
+                <CardTitle className="text-base">Advanced</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0 overflow-hidden">
+                <ParameterPanel showAdvanced />
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </div>

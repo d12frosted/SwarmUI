@@ -15,3 +15,6 @@ export * from "./endpoints/models";
 
 // Generation endpoints
 export * from "./endpoints/generation";
+
+// Preset endpoints
+export * from "./endpoints/presets";

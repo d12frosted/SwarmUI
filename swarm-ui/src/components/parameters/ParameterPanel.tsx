@@ -29,7 +29,7 @@ interface ParameterPanelProps {
 const CORE_PARAMS = ["prompt", "negativeprompt", "model", "images", "steps", "cfgscale", "seed", "width", "height", "aspectratio", "sampler", "scheduler"];
 
 // Parameters handled by dedicated components in Main tab (always skip these in ParameterPanel)
-const MAIN_TAB_PARAMS = ["prompt", "negativeprompt", "model", "width", "height", "aspectratio", "images", "steps", "cfgscale", "seed"];
+const MAIN_TAB_PARAMS = ["prompt", "negativeprompt", "model", "width", "height", "aspectratio", "images", "steps", "cfgscale", "seed", "sampler", "scheduler"];
 
 export function ParameterPanel({ showAdvanced = false, filterGroup }: ParameterPanelProps) {
   const { sessionId, isInitialized } = useSessionStore();

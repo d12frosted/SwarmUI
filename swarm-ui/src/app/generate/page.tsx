@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useSessionStore } from "@/stores/session";
 import { useStatusStore } from "@/stores/status";
 import { useParametersStore } from "@/stores/parameters";
-import { ParameterPanel, TextInput, ResolutionSelector, SliderInput, NumberInput } from "@/components/parameters";
+import { ParameterPanel, TextInput, ResolutionSelector, SliderInput, NumberInput, DropdownInput } from "@/components/parameters";
 import { ModelSelector } from "@/components/models/ModelSelector";
 import { GenerateButton, ImageResult, BatchHistory } from "@/components/generation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +16,11 @@ import type { GeneratedImage } from "@/types/api";
 export default function GeneratePage() {
   const { isLoading, isInitialized } = useSessionStore();
   const { waitingGens, liveGens, loadingModels } = useStatusStore();
-  const { values, setValue } = useParametersStore();
+  const { values, setValue, paramTypes } = useParametersStore();
+
+  // Get dropdown options from param types
+  const samplerOptions = paramTypes.find(p => p.id === "sampler")?.values || [];
+  const schedulerOptions = paramTypes.find(p => p.id === "scheduler")?.values || [];
   const [selectedBatchIndex, setSelectedBatchIndex] = useState<number | undefined>();
 
   if (isLoading || !isInitialized) {
@@ -132,6 +136,28 @@ export default function GeneratePage() {
                         max={30}
                         step={0.5}
                       />
+
+                      {/* Sampler & Scheduler */}
+                      {samplerOptions.length > 0 && (
+                        <DropdownInput
+                          id="sampler"
+                          label="Sampler"
+                          description="Sampling algorithm"
+                          value={String(values.sampler || samplerOptions[0])}
+                          onChange={(v) => setValue("sampler", v)}
+                          options={samplerOptions}
+                        />
+                      )}
+                      {schedulerOptions.length > 0 && (
+                        <DropdownInput
+                          id="scheduler"
+                          label="Scheduler"
+                          description="Noise schedule"
+                          value={String(values.scheduler || schedulerOptions[0])}
+                          onChange={(v) => setValue("scheduler", v)}
+                          options={schedulerOptions}
+                        />
+                      )}
 
                       {/* Seed */}
                       <NumberInput

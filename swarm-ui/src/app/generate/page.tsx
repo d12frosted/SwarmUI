@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useSessionStore } from "@/stores/session";
 import { useStatusStore } from "@/stores/status";
 import { useParametersStore } from "@/stores/parameters";
-import { ParameterPanel, TextInput, ResolutionSelector } from "@/components/parameters";
+import { ParameterPanel, TextInput, ResolutionSelector, SliderInput, NumberInput } from "@/components/parameters";
 import { ModelSelector } from "@/components/models/ModelSelector";
 import { GenerateButton, ImageResult, BatchHistory } from "@/components/generation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -107,6 +107,57 @@ export default function GeneratePage() {
                         height={Number(values.height) || 512}
                         onWidthChange={(w) => setValue("width", w)}
                         onHeightChange={(h) => setValue("height", h)}
+                      />
+
+                      {/* Steps */}
+                      <SliderInput
+                        id="steps"
+                        label="Steps"
+                        description="Number of denoising steps"
+                        value={Number(values.steps) || 20}
+                        onChange={(v) => setValue("steps", v)}
+                        min={1}
+                        max={150}
+                        step={1}
+                      />
+
+                      {/* CFG Scale */}
+                      <SliderInput
+                        id="cfgscale"
+                        label="CFG Scale"
+                        description="How closely to follow the prompt"
+                        value={Number(values.cfgscale) || 7}
+                        onChange={(v) => setValue("cfgscale", v)}
+                        min={1}
+                        max={30}
+                        step={0.5}
+                      />
+
+                      {/* Seed */}
+                      <NumberInput
+                        id="seed"
+                        label="Seed"
+                        description="Random seed (-1 for random)"
+                        value={Number(values.seed) ?? -1}
+                        onChange={(v) => setValue("seed", v)}
+                        min={-1}
+                        max={2147483647}
+                        showRandomize
+                        showReset
+                        defaultValue={-1}
+                      />
+
+                      {/* Images */}
+                      <NumberInput
+                        id="images"
+                        label="Images"
+                        description="Number of images to generate"
+                        value={Number(values.images) || 1}
+                        onChange={(v) => setValue("images", v)}
+                        min={1}
+                        max={100}
+                        showReset
+                        defaultValue={1}
                       />
 
                       {/* Generate Button */}

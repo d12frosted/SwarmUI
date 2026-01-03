@@ -28,6 +28,9 @@ interface ParameterPanelProps {
 // Core parameters that should always be visible at the top
 const CORE_PARAMS = ["prompt", "negativeprompt", "model", "images", "steps", "cfgscale", "seed", "width", "height", "aspectratio", "sampler", "scheduler"];
 
+// Parameters handled by dedicated components in Main tab (always skip these in ParameterPanel)
+const MAIN_TAB_PARAMS = ["prompt", "negativeprompt", "model", "width", "height", "aspectratio", "images", "steps", "cfgscale", "seed"];
+
 export function ParameterPanel({ showAdvanced = false, filterGroup }: ParameterPanelProps) {
   const { sessionId, isInitialized } = useSessionStore();
   const { paramTypes, values, isLoading, isLoaded, loadParams, setValue, resetToDefaults } = useParametersStore();
@@ -50,6 +53,9 @@ export function ParameterPanel({ showAdvanced = false, filterGroup }: ParameterP
     for (const param of paramTypes) {
       // Skip invisible params
       if (param.visible === false) continue;
+
+      // Skip params handled by Main tab when showing Advanced panel
+      if (showAdvanced && MAIN_TAB_PARAMS.includes(param.id)) continue;
 
       // Filter by search
       if (searchQuery) {
@@ -79,7 +85,7 @@ export function ParameterPanel({ showAdvanced = false, filterGroup }: ParameterP
     core.sort((a, b) => CORE_PARAMS.indexOf(a.id) - CORE_PARAMS.indexOf(b.id));
 
     return { coreParams: core, advancedParams: advanced, groupedParams: grouped };
-  }, [paramTypes, searchQuery, filterGroup]);
+  }, [paramTypes, searchQuery, filterGroup, showAdvanced]);
 
   const renderParameter = (param: T2IParamType) => {
     const value = values[param.id] ?? param.default;

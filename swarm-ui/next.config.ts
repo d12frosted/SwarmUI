@@ -1,12 +1,20 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Proxy API calls to the ASP.NET backend
+  // Proxy API calls and assets to the ASP.NET backend
   async rewrites() {
     return [
       {
         source: "/API/:path*",
         destination: "http://localhost:7801/API/:path*",
+      },
+      {
+        source: "/ViewSpecial/:path*",
+        destination: "http://localhost:7801/ViewSpecial/:path*",
+      },
+      {
+        source: "/Output/:path*",
+        destination: "http://localhost:7801/Output/:path*",
       },
     ];
   },

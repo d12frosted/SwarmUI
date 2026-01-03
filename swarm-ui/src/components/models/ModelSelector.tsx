@@ -23,6 +23,23 @@ import {
 import { Search, Check, Loader2, ChevronDown } from "lucide-react";
 import type { ModelData } from "@/types/api";
 
+/** Strip HTML tags and decode entities for plain text display */
+function stripHtml(html: string): string {
+  // Remove HTML tags
+  let text = html.replace(/<[^>]*>/g, " ");
+  // Decode common HTML entities
+  text = text
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+  // Collapse whitespace
+  text = text.replace(/\s+/g, " ").trim();
+  return text;
+}
+
 interface ModelSelectorProps {
   onModelSelect?: (modelName: string) => void;
 }
@@ -161,7 +178,7 @@ function ModelCard({ model, isSelected, isLoaded, onSelect }: ModelCardProps) {
 
             {model.description && (
               <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">
-                {model.description}
+                {stripHtml(model.description)}
               </p>
             )}
 

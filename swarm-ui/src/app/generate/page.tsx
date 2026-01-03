@@ -168,6 +168,7 @@ export default function GeneratePage() {
                           showRandomize
                           showReset
                           defaultValue={-1}
+                          hideSpinButtons
                         />
                         <NumberInput
                           id="images"

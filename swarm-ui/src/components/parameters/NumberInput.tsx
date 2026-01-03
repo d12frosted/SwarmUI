@@ -24,6 +24,7 @@ interface NumberInputProps {
   showRandomize?: boolean;
   showReset?: boolean;
   defaultValue?: number;
+  hideSpinButtons?: boolean;
 }
 
 export function NumberInput({
@@ -39,6 +40,7 @@ export function NumberInput({
   showRandomize = false,
   showReset = false,
   defaultValue,
+  hideSpinButtons = false,
 }: NumberInputProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const parsed = parseFloat(e.target.value);
@@ -91,7 +93,7 @@ export function NumberInput({
           max={max}
           step={step}
           disabled={disabled}
-          className="flex-1 h-8"
+          className={`flex-1 h-8 ${hideSpinButtons ? "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" : ""}`}
         />
         {showRandomize && (
           <TooltipProvider>

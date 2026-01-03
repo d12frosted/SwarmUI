@@ -61,7 +61,7 @@ export default function GeneratePage() {
       </header>
 
       {/* Main Content - Fixed viewport height with independent scrolling columns */}
-      <div className="container px-4 py-4 h-[calc(100vh-3.5rem)] overflow-hidden">
+      <div className="px-4 py-4 h-[calc(100vh-3.5rem)] overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-full items-start">
           {/* Left Panel - Parameters (fixed height, internal scroll) */}
           <div className="lg:col-span-3 h-full max-h-full overflow-hidden">
@@ -85,7 +85,7 @@ export default function GeneratePage() {
                         value={String(values.prompt || "")}
                         onChange={(v) => setValue("prompt", v)}
                         placeholder="A beautiful sunset over mountains..."
-                        rows={4}
+                        rows={6}
                       />
 
                       {/* Negative Prompt */}
@@ -96,7 +96,7 @@ export default function GeneratePage() {
                         value={String(values.negativeprompt || "")}
                         onChange={(v) => setValue("negativeprompt", v)}
                         placeholder="blurry, low quality..."
-                        rows={2}
+                        rows={3}
                       />
 
                       {/* Model Selector */}

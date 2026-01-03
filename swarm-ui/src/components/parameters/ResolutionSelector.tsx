@@ -173,7 +173,7 @@ export function ResolutionSelector({
         <div className="space-y-1">
           <Label className="text-sm">Aspect</Label>
           <Select value={selectedAspect} onValueChange={handleAspectChange}>
-            <SelectTrigger className="h-8">
+            <SelectTrigger className="h-8 w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

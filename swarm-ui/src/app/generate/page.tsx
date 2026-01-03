@@ -71,12 +71,12 @@ export default function GeneratePage() {
               <Tabs defaultValue="main" className="h-full flex flex-col">
                 <div className="flex items-center justify-between px-3 py-2 border-b shrink-0">
                   <TabsList className="h-8">
-                    <TabsTrigger value="main" className="text-xs px-3 h-7">Main</TabsTrigger>
-                    <TabsTrigger value="all" className="text-xs px-3 h-7">All</TabsTrigger>
+                    <TabsTrigger value="main" className="text-xs px-3 h-7">Core</TabsTrigger>
+                    <TabsTrigger value="all" className="text-xs px-3 h-7">Advanced</TabsTrigger>
                   </TabsList>
                 </div>
                 <TabsContent value="main" className="flex-1 overflow-auto m-0">
-                  <div className="flex flex-col p-3 space-y-3">
+                  <div className="flex flex-col p-3 space-y-4">
                       {/* Prompt */}
                       <TextInput
                         id="prompt"
@@ -187,7 +187,7 @@ export default function GeneratePage() {
                   </div>
                 </TabsContent>
                 <TabsContent value="all" className="flex-1 overflow-hidden m-0">
-                  <ParameterPanel />
+                  <ParameterPanel showAdvanced />
                 </TabsContent>
               </Tabs>
             </Card>

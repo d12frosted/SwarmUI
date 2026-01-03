@@ -92,7 +92,7 @@ export function SliderInput({
           max={max}
           step={step}
           disabled={disabled}
-          className="w-20 h-7 text-sm text-right"
+          className="w-16 h-7 text-sm text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
       </div>
       <Slider

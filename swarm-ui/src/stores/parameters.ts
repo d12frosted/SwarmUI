@@ -243,6 +243,9 @@ export const useParametersStore = create<ParametersState>()(
         if (values.prompt) input.prompt = values.prompt;
         if (values.negativeprompt) input.negativeprompt = values.negativeprompt;
 
+        // Always include images (batch size) - must be at least 1
+        input.images = Number(values.images) || 1;
+
         return input;
       },
     }),

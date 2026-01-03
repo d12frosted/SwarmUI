@@ -81,6 +81,20 @@ AI Backends (ComfyUI, Auto WebUI, etc.)
 - Core themes should only modify colors
 - Register in `WebServer.cs` `PreInit()` block
 
+## Next.js Frontend (swarm-ui/)
+
+A modern Next.js frontend is being developed in `swarm-ui/` alongside the legacy JS frontend.
+
+```bash
+# Use bun for package management (not npm)
+cd swarm-ui
+bun install
+bun run dev      # Development server on port 3000
+bun run build    # Production build
+```
+
+Tech stack: Next.js 14+, TypeScript, Tailwind CSS, shadcn/ui, Zustand, React Query
+
 ## Important Notes
 
 - No automated test suite in core; manual testing via web UI or API

@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
         destination: "http://localhost:7801/API/:path*",
       },
       {
+        source: "/View/:path*",
+        destination: "http://localhost:7801/View/:path*",
+      },
+      {
         source: "/ViewSpecial/:path*",
         destination: "http://localhost:7801/ViewSpecial/:path*",
       },

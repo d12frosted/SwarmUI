@@ -10,7 +10,7 @@ import { useParametersStore } from "@/stores/parameters";
 import { WSClient } from "@/lib/websocket/client";
 import { interruptAll } from "@/lib/api";
 import { Play, Square, AlertCircle } from "lucide-react";
-import type { WSMessage, GeneratedImage, GenerationProgress } from "@/types/api";
+import type { WSMessage, GeneratedImage, GenerationProgress, ImageMetadata } from "@/types/api";
 
 interface GenerateButtonProps {
   onImageGenerated?: (image: GeneratedImage) => void;
@@ -71,11 +71,24 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
           setPreviewImage(requestId, message.gen_progress.preview);
         }
 
-        // Handle generated images
+        // Handle generated images - image field is an object with {image, batch_index, metadata}
         if (message.image) {
+          const imgData = message.image;
+          console.log("[Gen] Final image:", imgData);
+
+          // Parse metadata if it's a JSON string
+          let metadata: Record<string, unknown> = {};
+          try {
+            if (imgData.metadata) {
+              metadata = JSON.parse(imgData.metadata);
+            }
+          } catch {
+            metadata = { raw: imgData.metadata };
+          }
+
           const generatedImage: GeneratedImage = {
-            image: message.image,
-            metadata: input as any,
+            image: imgData.image.startsWith("data:") ? imgData.image : `/${imgData.image}`,
+            metadata: metadata as ImageMetadata,
             batch_id: requestId,
           };
           addGeneratedImage(requestId, generatedImage);
@@ -84,9 +97,23 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
 
         // Handle multiple images
         if (message.images) {
-          for (const img of message.images) {
-            addGeneratedImage(requestId, img);
-            onImageGenerated?.(img);
+          for (const imgData of message.images) {
+            let metadata: Record<string, unknown> = {};
+            try {
+              if (imgData.metadata) {
+                metadata = JSON.parse(imgData.metadata);
+              }
+            } catch {
+              metadata = { raw: imgData.metadata };
+            }
+
+            const generatedImage: GeneratedImage = {
+              image: imgData.image.startsWith("data:") ? imgData.image : `/${imgData.image}`,
+              metadata: metadata as ImageMetadata,
+              batch_id: requestId,
+            };
+            addGeneratedImage(requestId, generatedImage);
+            onImageGenerated?.(generatedImage);
           }
         }
 

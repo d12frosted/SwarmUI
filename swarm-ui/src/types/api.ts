@@ -178,15 +178,24 @@ export interface ImageMetadata {
   [key: string]: unknown;
 }
 
+// WebSocket image result from generation
+export interface WSImageResult {
+  image: string;
+  batch_index: string;
+  metadata: string;
+}
+
 // WebSocket message types
 export interface WSMessage {
   status?: ServerStatus;
   gen_progress?: GenerationProgress;
-  image?: string;
-  images?: GeneratedImage[];
+  image?: WSImageResult;
+  images?: WSImageResult[];
   discard_indices?: number[];
   error?: string;
   error_id?: string;
+  keep_alive?: boolean;
+  socket_intention?: string;
 }
 
 // API Response wrapper

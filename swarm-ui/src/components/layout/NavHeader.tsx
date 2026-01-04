@@ -142,7 +142,7 @@ export function NavHeader() {
               <PopoverTrigger asChild>
                 <button
                   className={cn(
-                    "flex items-center gap-1 px-2 py-1 rounded-md text-xs sm:text-sm font-medium transition-colors",
+                    "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs sm:text-sm font-medium transition-colors",
                     isGenerating
                       ? "bg-purple-500/10 text-purple-500 hover:bg-purple-500/20"
                       : "text-muted-foreground hover:bg-muted"
@@ -153,11 +153,20 @@ export function NavHeader() {
                   ) : (
                     <Image className="h-4 w-4" />
                   )}
+                  {/* Show queue count when generating multiple */}
+                  {isGenerating && activeCount > 1 && (
+                    <span className="text-purple-400">+{activeCount - 1}</span>
+                  )}
+                  {/* Separator when both queue and batch shown */}
+                  {isGenerating && activeCount > 1 && batch.length > 0 && (
+                    <span className="text-muted-foreground/50">│</span>
+                  )}
+                  {/* Total batch count */}
                   {batch.length > 0 && (
                     <span>{batch.length}</span>
                   )}
                   {isGeneratingForever && (
-                    <Repeat className="h-3 w-3" />
+                    <Repeat className="h-3 w-3 ml-0.5" />
                   )}
                 </button>
               </PopoverTrigger>

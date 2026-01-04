@@ -177,10 +177,7 @@ export default function GeneratePage() {
 
           {/* Center Panel - Image Result */}
           <div className="lg:col-span-6 h-full overflow-hidden isolate">
-            <Card className="h-full flex flex-col">
-              <div className="px-3 py-2 border-b shrink-0">
-                <span className="text-sm font-medium">Result</span>
-              </div>
+            <Card className="h-full flex flex-col py-0">
               <CardContent className="flex-1 p-3 min-h-0 overflow-hidden">
                 <ImageResult
                   className="h-full"
@@ -193,10 +190,7 @@ export default function GeneratePage() {
 
           {/* Right Panel - History */}
           <div className="lg:col-span-3 h-full overflow-hidden isolate">
-            <Card className="h-full flex flex-col overflow-hidden">
-              <div className="px-3 py-2 border-b shrink-0">
-                <span className="text-sm font-medium">History</span>
-              </div>
+            <Card className="h-full flex flex-col overflow-hidden py-0">
               <CardContent className="flex-1 p-3 min-h-0 overflow-hidden">
                 <BatchHistory
                   onImageSelect={handleBatchImageSelect}

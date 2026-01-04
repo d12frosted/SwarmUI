@@ -99,28 +99,32 @@ export function BatchHistory({ onImageSelect, selectedIndex }: BatchHistoryProps
 
   return (
     <div className="h-full flex flex-col min-h-0 overflow-hidden">
-      {/* Header with count and size selector */}
+      {/* Header with title, count and size selector */}
       <div className="flex items-center justify-between mb-2 shrink-0 gap-2">
-        <span className="text-xs text-muted-foreground">
-          {batch.length} image{batch.length !== 1 ? "s" : ""}
-        </span>
+        <span className="text-sm font-medium">History</span>
 
-        {/* Size selector */}
-        <div className="flex items-center gap-0.5">
-          {(Object.keys(SIZE_CONFIG) as ThumbnailSize[]).map((s) => (
-            <button
-              key={s}
-              className={cn(
-                "px-1.5 py-0.5 text-xs font-medium rounded transition-colors",
-                size === s
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
-              )}
-              onClick={() => setSize(s)}
-            >
-              {SIZE_CONFIG[s].label}
-            </button>
-          ))}
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground">
+            {batch.length} image{batch.length !== 1 ? "s" : ""}
+          </span>
+
+          {/* Size selector */}
+          <div className="flex items-center gap-0.5">
+            {(Object.keys(SIZE_CONFIG) as ThumbnailSize[]).map((s) => (
+              <button
+                key={s}
+                className={cn(
+                  "px-1.5 py-0.5 text-xs font-medium rounded transition-colors",
+                  size === s
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                )}
+                onClick={() => setSize(s)}
+              >
+                {SIZE_CONFIG[s].label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

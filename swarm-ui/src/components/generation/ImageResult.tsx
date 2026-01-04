@@ -182,8 +182,9 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
 
   return (
     <div className={`flex flex-col h-full ${className}`}>
-      {/* Ratio selector */}
-      <div className="flex items-center justify-end mb-2 shrink-0">
+      {/* Header with title and ratio selector */}
+      <div className="flex items-center justify-between mb-2 shrink-0">
+        <span className="text-sm font-medium">Preview</span>
         <div className="flex items-center gap-0.5">
           {(Object.keys(RATIO_CONFIG) as PreviewRatio[]).map((r) => (
             <button

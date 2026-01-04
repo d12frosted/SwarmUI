@@ -54,22 +54,24 @@ export function NavHeader() {
     stopPolling
   } = useGenerationStore();
 
-  // Check for active generations on mount
+  // Check for active generations on mount (only once per session)
+  const [hasCheckedReconnection, setHasCheckedReconnection] = useState(false);
   useEffect(() => {
-    if (sessionId && !isGenerating) {
+    if (sessionId && !hasCheckedReconnection && !currentRequest) {
+      console.log("[NavHeader] Checking for active generations...");
+      setHasCheckedReconnection(true);
       checkActiveGenerations(sessionId);
     }
-  }, [sessionId, checkActiveGenerations, isGenerating]);
+  }, [sessionId, hasCheckedReconnection, currentRequest, checkActiveGenerations]);
 
   // Start polling when reconnected
   useEffect(() => {
     if (isReconnected && sessionId) {
+      console.log("[NavHeader] Starting polling for reconnected generation");
       startPolling(sessionId, 2000);
     }
     return () => {
-      if (isReconnected) {
-        stopPolling();
-      }
+      stopPolling();
     };
   }, [isReconnected, sessionId, startPolling, stopPolling]);
 

@@ -272,11 +272,12 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
 
       if (activeGen) {
         // Found active generation - we're in reconnected mode
+        console.log("[Generation] Reconnecting to active generation:", activeGen);
         set({
           isGenerating: true,
           isReconnected: true,
           reconnectedGeneration: activeGen,
-          queuedCount: Math.max(0, activeGen.waiting_gens - 1), // -1 because one is live
+          queuedCount: activeGen.waiting_gens,
         });
       } else {
         // No active generations

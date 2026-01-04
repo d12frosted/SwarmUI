@@ -57,8 +57,26 @@ export const useSessionStore = create<SessionState>()(
         set({ isLoading: true, error: null });
 
         try {
+          // Reuse existing session if we have one (e.g., after page refresh)
+          if (sessionId) {
+            console.log("[Session] Reusing existing session:", sessionId);
+            // Verify session is still valid by fetching user data
+            try {
+              const userData = await getMyUserData(sessionId);
+              set({
+                userData,
+                isInitialized: true,
+              });
+              return;
+            } catch {
+              // Session invalid, get a new one
+              console.log("[Session] Existing session invalid, creating new one");
+            }
+          }
+
           // Get new session from server
           const session = await getNewSession();
+          console.log("[Session] Created new session:", session.session_id);
 
           set({
             sessionId: session.session_id,
@@ -158,6 +176,11 @@ export const useSessionStore = create<SessionState>()(
       storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         sessionId: state.sessionId,
+        userId: state.userId,
+        permissions: state.permissions,
+        version: state.version,
+        serverId: state.serverId,
+        outputAppendUser: state.outputAppendUser,
       }),
     }
   )

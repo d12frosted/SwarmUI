@@ -20,6 +20,9 @@ interface GenerationState {
   currentRequest: GenerationRequest | null;
   isGenerating: boolean;
 
+  // Queue tracking (local count for accurate display)
+  queuedCount: number;
+
   // Batch of generated images (current session)
   batch: GeneratedImage[];
   batchId: string | null;
@@ -44,6 +47,9 @@ interface GenerationState {
   removeFromBatch: (index: number) => void;
   setGeneratingForever: (value: boolean) => void;
   setGeneratingPreviews: (value: boolean) => void;
+  incrementQueue: () => void;
+  decrementQueue: () => void;
+  resetQueue: () => void;
 }
 
 function generateId(): string {
@@ -54,6 +60,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
   // Initial state
   currentRequest: null,
   isGenerating: false,
+  queuedCount: 0,
   batch: [],
   batchId: null,
   history: [],
@@ -229,5 +236,17 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
 
   setGeneratingPreviews: (value: boolean) => {
     set({ isGeneratingPreviews: value });
+  },
+
+  incrementQueue: () => {
+    set((state) => ({ queuedCount: state.queuedCount + 1 }));
+  },
+
+  decrementQueue: () => {
+    set((state) => ({ queuedCount: Math.max(0, state.queuedCount - 1) }));
+  },
+
+  resetQueue: () => {
+    set({ queuedCount: 0 });
   },
 }));

@@ -40,8 +40,10 @@ export function NavHeader() {
     currentRequest,
     isGenerating,
     isGeneratingForever,
+    queuedCount,
     batch,
-    cancelGeneration
+    cancelGeneration,
+    resetQueue
   } = useGenerationStore();
 
   const activeDownloads = downloads.filter(
@@ -135,7 +137,7 @@ export function NavHeader() {
                         variant="ghost"
                         size="sm"
                         className="h-6 px-2 text-xs"
-                        onClick={cancelGeneration}
+                        onClick={() => { cancelGeneration(); resetQueue(); }}
                       >
                         <X className="h-3 w-3 mr-1" />
                         Cancel
@@ -157,10 +159,10 @@ export function NavHeader() {
                             </Badge>
                           )}
                         </span>
-                        {waitingGens > 0 && (
+                        {queuedCount > 0 && (
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {waitingGens} queued
+                            {queuedCount} queued
                           </span>
                         )}
                       </div>

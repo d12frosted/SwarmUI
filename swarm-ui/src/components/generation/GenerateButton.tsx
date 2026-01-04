@@ -31,6 +31,7 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
     isGenerating,
     currentRequest,
     isGeneratingForever,
+    queuedCount,
     startGeneration,
     updateProgress,
     setPreviewImage,
@@ -39,11 +40,13 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
     failGeneration,
     cancelGeneration,
     setGeneratingForever,
+    incrementQueue,
+    decrementQueue,
+    resetQueue,
   } = useGenerationStore();
   const { updateFromWSMessage } = useStatusStore();
   const { getGenerationInput } = useParametersStore();
   const [lastError, setLastError] = useState<string | null>(null);
-  const [localQueueCount, setLocalQueueCount] = useState(0);
   const generateForeverRef = useRef(false);
 
   // Keep ref in sync with store
@@ -76,9 +79,9 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
       ? `queue-${Date.now()}`  // Dummy ID for queued items
       : startGeneration(input);
 
-    // Track local queue count
+    // Track queue count in store
     if (isAddingToQueue) {
-      setLocalQueueCount(prev => prev + 1);
+      incrementQueue();
     }
 
     // Create WebSocket connection
@@ -216,9 +219,9 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
       },
       onStateChange: (state) => {
         if (state === "completed" || state === "disconnected") {
-          // Decrement local queue count when a queued item completes
+          // Decrement queue count when a queued item completes
           if (isAddingToQueue) {
-            setLocalQueueCount(prev => Math.max(0, prev - 1));
+            decrementQueue();
           } else if (useGenerationStore.getState().currentRequest?.id === requestId) {
             completeGeneration(requestId);
             // If generate forever is enabled, start a new generation
@@ -241,7 +244,7 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
           error instanceof Error ? error.message : "Failed to connect"
         );
       } else {
-        setLocalQueueCount(prev => Math.max(0, prev - 1));
+        decrementQueue();
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -266,21 +269,21 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
     try {
       await interruptAll(sessionId);
       cancelGeneration();
-      setLocalQueueCount(0); // Reset local queue count
+      resetQueue();
     } catch (error) {
       console.error("Failed to interrupt:", error);
     }
-  }, [sessionId, cancelGeneration]);
+  }, [sessionId, cancelGeneration, resetQueue]);
 
   const progress = currentRequest?.progress;
   const progressPercent = progress
     ? Math.round(progress.overall_percent * 100)
     : 0;
 
-  // Combine backend queue info with local tracking
-  const totalQueued = Math.max(waitingGens + liveGens, localQueueCount + (isGenerating ? 1 : 0));
+  // Combine backend queue info with store tracking
+  const totalQueued = Math.max(waitingGens + liveGens, queuedCount + (isGenerating ? 1 : 0));
   const hasQueue = totalQueued > 0 || isGenerating;
-  const displayQueueCount = Math.max(waitingGens, localQueueCount);
+  const displayQueueCount = Math.max(waitingGens, queuedCount);
   const queueFull = waitingGens > 10;
 
   return (

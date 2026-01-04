@@ -75,6 +75,13 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (fullViewOpen) return; // Let dialog handle its own keys
+
+      // Ignore when focus is in an input field
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+        return;
+      }
+
       if (e.key === "ArrowLeft" && canGoNext) {
         handleNavigate(1);
       } else if (e.key === "ArrowRight" && canGoPrev) {

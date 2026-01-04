@@ -13,8 +13,7 @@ import {
   DialogHeader,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ImageViewerDialog } from "@/components/shared";
 import {
   Download,
   ZoomIn,
@@ -204,83 +203,20 @@ export function ImageResult({ className }: ImageResultProps) {
       )}
 
       {/* Full View Dialog */}
-      <Dialog open={fullViewOpen} onOpenChange={setFullViewOpen}>
-        <DialogContent className="!w-[90vw] !h-[90vh] !max-w-[90vw] !max-h-[90vh] !p-0 overflow-hidden">
-          <VisuallyHidden>
-            <DialogTitle>Image Details</DialogTitle>
-          </VisuallyHidden>
-          {selectedImage && (
-            <div className="flex flex-col lg:flex-row h-full">
-              {/* Image - takes most of the space */}
-              <div className="flex-1 flex items-center justify-center bg-black/95">
-                <img
-                  src={selectedImage.image}
-                  alt="Generated image"
-                  className="max-w-full max-h-[90vh] object-contain"
-                />
-              </div>
-
-              {/* Details Panel */}
-              <div className="w-full lg:w-96 bg-background border-l flex flex-col shrink-0">
-                <div className="p-4 border-b shrink-0">
-                  <h2 className="font-semibold">Image Details</h2>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2 p-4 border-b shrink-0">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDownload(selectedImage)}
-                  >
-                    <Download className="h-4 w-4 mr-1" />
-                    Download
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleCopyPrompt(selectedImage)}
-                  >
-                    <Copy className="h-4 w-4 mr-1" />
-                    Copy Prompt
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setFullViewOpen(false);
-                      handleOpenEditor(selectedImage);
-                    }}
-                  >
-                    <Paintbrush className="h-4 w-4 mr-1" />
-                    Edit
-                  </Button>
-                </div>
-
-                {/* Metadata */}
-                <ScrollArea className="flex-1 p-4">
-                  <div className="space-y-3 text-sm">
-                    {Object.entries(selectedImage.metadata || {}).length === 0 ? (
-                      <p className="text-muted-foreground">No metadata available</p>
-                    ) : (
-                      Object.entries(selectedImage.metadata || {}).map(([key, value]) => (
-                        <div key={key} className="space-y-1">
-                          <span className="font-medium text-muted-foreground capitalize text-xs">
-                            {key}
-                          </span>
-                          <p className="break-words">
-                            {String(value)}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </ScrollArea>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {selectedImage && (
+        <ImageViewerDialog
+          open={fullViewOpen}
+          onOpenChange={setFullViewOpen}
+          imageSrc={selectedImage.image}
+          metadata={selectedImage.metadata}
+          onDownload={() => handleDownload(selectedImage)}
+          onCopyPrompt={() => handleCopyPrompt(selectedImage)}
+          onEdit={() => {
+            setFullViewOpen(false);
+            handleOpenEditor(selectedImage);
+          }}
+        />
+      )}
 
       {/* Image Editor Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>

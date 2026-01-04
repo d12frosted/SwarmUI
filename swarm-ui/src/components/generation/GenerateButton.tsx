@@ -101,14 +101,20 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
             return;
           }
 
-          // Parse metadata if available
+          // Parse metadata if available - check both message.metadata and imgData.metadata
           let metadata: Record<string, unknown> = {};
-          if (typeof imgData === 'object' && imgData.metadata) {
+          const rawMetadata = (message as Record<string, unknown>).metadata ||
+                              (typeof imgData === 'object' ? imgData.metadata : null);
+          if (rawMetadata) {
             try {
-              metadata = JSON.parse(imgData.metadata);
+              metadata = typeof rawMetadata === 'string' ? JSON.parse(rawMetadata) : rawMetadata;
             } catch {
-              metadata = { raw: imgData.metadata };
+              metadata = { raw: rawMetadata };
             }
+          }
+          // Fallback to input params if no metadata from backend
+          if (Object.keys(metadata).length === 0) {
+            metadata = { ...input };
           }
 
           // Backend returns URLs like "/Output/..." - use as-is if starting with / or data:
@@ -136,13 +142,19 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
 
             if (!imageUrl) continue;
 
+            // Parse metadata if available
             let metadata: Record<string, unknown> = {};
-            if (typeof imgData === 'object' && imgData.metadata) {
+            const rawMetadata = typeof imgData === 'object' ? imgData.metadata : null;
+            if (rawMetadata) {
               try {
-                metadata = JSON.parse(imgData.metadata);
+                metadata = typeof rawMetadata === 'string' ? JSON.parse(rawMetadata) : rawMetadata;
               } catch {
-                metadata = { raw: imgData.metadata };
+                metadata = { raw: rawMetadata };
               }
+            }
+            // Fallback to input params if no metadata from backend
+            if (Object.keys(metadata).length === 0) {
+              metadata = { ...input };
             }
 
             // Backend returns URLs like "/Output/..." - use as-is if starting with / or data:

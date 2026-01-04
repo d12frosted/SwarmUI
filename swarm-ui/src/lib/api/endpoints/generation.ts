@@ -70,6 +70,17 @@ export async function openImageFolder(
   await apiRequest("OpenImageFolder", { image: imageSrc }, { sessionId });
 }
 
+export interface ImageMetadataResponse {
+  metadata: ImageMetadata;
+}
+
+export async function getImageMetadata(
+  imageSrc: string,
+  sessionId: string
+): Promise<ImageMetadataResponse> {
+  return apiRequest<ImageMetadataResponse>("GetImageMetadata", { image: imageSrc }, { sessionId });
+}
+
 export interface DetailedTokensResponse {
   tokens: Array<{
     text: string;

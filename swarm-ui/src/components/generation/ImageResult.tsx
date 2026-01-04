@@ -3,9 +3,12 @@
 import { useState, useCallback, useEffect } from "react";
 import { useGenerationStore } from "@/stores/generation";
 import { useSessionStore } from "@/stores/session";
+import { useParametersStore } from "@/stores/parameters";
+import { useLoraStore } from "@/stores/loras";
 import { Button } from "@/components/ui/button";
 import { ImageViewerDialog, ImageDetailsPanel } from "@/components/shared";
 import { deleteImage } from "@/lib/api";
+import { extractConfigFromMetadata } from "@/lib/metadata";
 import {
   ZoomIn,
   Loader2,
@@ -98,9 +101,12 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
     }
   };
 
-  const handleCopyPrompt = (image: GeneratedImage) => {
-    if (image.metadata?.prompt) {
-      navigator.clipboard.writeText(String(image.metadata.prompt));
+  const handleUseConfig = (image: GeneratedImage) => {
+    if (image.metadata) {
+      const config = extractConfigFromMetadata(image.metadata);
+      useParametersStore.getState().setValues(config);
+      // Sync LoRA UI from the updated parameters
+      useLoraStore.getState().syncFromParams();
     }
   };
 
@@ -259,7 +265,7 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
             <ImageDetailsPanel
               metadata={displayImage.metadata}
               onDownload={() => handleDownload(displayImage)}
-              onCopyPrompt={() => handleCopyPrompt(displayImage)}
+              onUseConfig={() => handleUseConfig(displayImage)}
               showActions={true}
               className="flex-1 flex flex-col min-h-0 overflow-hidden"
             />
@@ -275,7 +281,7 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
           imageSrc={displayImage.image}
           metadata={displayImage.metadata}
           onDownload={() => handleDownload(displayImage)}
-          onCopyPrompt={() => handleCopyPrompt(displayImage)}
+          onUseConfig={() => handleUseConfig(displayImage)}
           showNavigation={batch.length > 1}
           currentIndex={currentIndex}
           totalCount={batch.length}

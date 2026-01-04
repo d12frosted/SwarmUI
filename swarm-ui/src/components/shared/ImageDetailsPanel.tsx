@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Copy, Download, Paintbrush } from "lucide-react";
+import { Copy, Download, Paintbrush, RotateCcw } from "lucide-react";
 import type { ImageMetadata } from "@/types/api";
 
 interface ImageDetailsPanelProps {
@@ -9,7 +9,7 @@ interface ImageDetailsPanelProps {
   imageSrc?: string;
   onDownload?: () => void;
   onEdit?: () => void;
-  onCopyPrompt?: () => void;
+  onUseConfig?: () => void;
   showActions?: boolean;
   className?: string;
 }
@@ -18,7 +18,7 @@ export function ImageDetailsPanel({
   metadata,
   onDownload,
   onEdit,
-  onCopyPrompt,
+  onUseConfig,
   showActions = true,
   className,
 }: ImageDetailsPanelProps) {
@@ -55,10 +55,10 @@ export function ImageDetailsPanel({
               Download
             </Button>
           )}
-          {onCopyPrompt && prompt && (
-            <Button variant="outline" size="sm" onClick={onCopyPrompt}>
-              <Copy className="h-4 w-4 mr-1" />
-              Copy Prompt
+          {onUseConfig && (
+            <Button variant="outline" size="sm" onClick={onUseConfig}>
+              <RotateCcw className="h-4 w-4 mr-1" />
+              Use Config
             </Button>
           )}
           {onEdit && (

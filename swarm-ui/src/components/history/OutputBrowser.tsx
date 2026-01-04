@@ -2,7 +2,10 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSessionStore } from "@/stores/session";
+import { useParametersStore } from "@/stores/parameters";
+import { useLoraStore } from "@/stores/loras";
 import { listImages } from "@/lib/api";
+import { extractConfigFromMetadata } from "@/lib/metadata";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -336,10 +339,13 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
     }
   };
 
-  // Copy prompt
-  const handleCopyPrompt = (image: OutputImage) => {
-    if (image.metadata?.prompt) {
-      navigator.clipboard.writeText(String(image.metadata.prompt));
+  // Use config from image
+  const handleUseConfig = (image: OutputImage) => {
+    if (image.metadata) {
+      const config = extractConfigFromMetadata(image.metadata);
+      useParametersStore.getState().setValues(config);
+      // Sync LoRA UI from the updated parameters
+      useLoraStore.getState().syncFromParams();
     }
   };
 
@@ -685,7 +691,7 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
                 <ImageDetailsPanel
                   metadata={selectedImage.metadata}
                   onDownload={() => handleDownload(selectedImage)}
-                  onCopyPrompt={() => handleCopyPrompt(selectedImage)}
+                  onUseConfig={() => handleUseConfig(selectedImage)}
                   showActions={true}
                   className="flex-1 flex flex-col min-h-0 overflow-hidden"
                 />

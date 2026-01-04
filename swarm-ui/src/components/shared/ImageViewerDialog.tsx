@@ -18,7 +18,7 @@ interface ImageViewerDialogProps {
   metadata?: ImageMetadata;
   onDownload?: () => void;
   onEdit?: () => void;
-  onCopyPrompt?: () => void;
+  onUseConfig?: () => void;
   // Navigation
   showNavigation?: boolean;
   currentIndex?: number;
@@ -35,7 +35,7 @@ export function ImageViewerDialog({
   metadata,
   onDownload,
   onEdit,
-  onCopyPrompt,
+  onUseConfig,
   showNavigation = false,
   currentIndex = 0,
   totalCount = 1,
@@ -106,8 +106,8 @@ export function ImageViewerDialog({
               metadata={metadata}
               onDownload={onDownload}
               onEdit={onEdit}
-              onCopyPrompt={onCopyPrompt}
-              showActions={!!(onDownload || onEdit || onCopyPrompt)}
+              onUseConfig={onUseConfig}
+              showActions={!!(onDownload || onEdit || onUseConfig)}
               className="flex-1 flex flex-col min-h-0 overflow-hidden"
             />
           </div>

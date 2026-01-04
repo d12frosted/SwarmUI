@@ -23,7 +23,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 import type { GeneratedImage } from "@/types/api";
+
+type PreviewRatio = "S" | "M" | "L";
+
+const RATIO_CONFIG: Record<PreviewRatio, { imageClass: string; metadataClass: string; label: string }> = {
+  L: { imageClass: "lg:flex-[3]", metadataClass: "lg:flex-1 lg:max-w-xs", label: "L" },
+  M: { imageClass: "lg:flex-[2]", metadataClass: "lg:flex-1", label: "M" },
+  S: { imageClass: "lg:flex-1", metadataClass: "lg:flex-[2]", label: "S" },
+};
 
 interface ImageResultProps {
   className?: string;
@@ -37,6 +46,7 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
   const [fullViewOpen, setFullViewOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [previewRatio, setPreviewRatio] = useState<PreviewRatio>("S");
 
   const previewImage = currentRequest?.previewImage;
   const isGenerating = currentRequest?.status === "generating";
@@ -57,14 +67,14 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
     }
   }, [currentIndex, batch.length, onIndexChange]);
 
-  // Keyboard navigation
+  // Keyboard navigation - left=newer, right=older
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (fullViewOpen) return; // Let dialog handle its own keys
-      if (e.key === "ArrowLeft" && canGoPrev) {
-        handleNavigate(-1);
-      } else if (e.key === "ArrowRight" && canGoNext) {
+      if (e.key === "ArrowLeft" && canGoNext) {
         handleNavigate(1);
+      } else if (e.key === "ArrowRight" && canGoPrev) {
+        handleNavigate(-1);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -124,12 +134,35 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
     }
   };
 
+  const ratioConfig = RATIO_CONFIG[previewRatio];
+
   return (
     <div className={`flex flex-col h-full ${className}`}>
+      {/* Ratio selector */}
+      <div className="flex items-center justify-end mb-2 shrink-0">
+        <div className="flex items-center gap-0.5">
+          {(Object.keys(RATIO_CONFIG) as PreviewRatio[]).map((r) => (
+            <button
+              key={r}
+              className={cn(
+                "px-1.5 py-0.5 text-xs font-medium rounded transition-colors",
+                previewRatio === r
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+              )}
+              onClick={() => setPreviewRatio(r)}
+              title={r === "S" ? "Small image, large metadata" : r === "M" ? "Balanced" : "Large image, small metadata"}
+            >
+              {RATIO_CONFIG[r].label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Main content - split into image and metadata */}
       <div className="flex-1 flex flex-col lg:flex-row gap-3 min-h-0 overflow-hidden">
-        {/* Image section - constrained size */}
-        <div className="flex-1 lg:flex-[2] flex flex-col min-h-0 min-w-0">
+        {/* Image section - configurable size */}
+        <div className={cn("flex-1 flex flex-col min-h-0 min-w-0", ratioConfig.imageClass)}>
           <div className="flex-1 relative rounded-lg overflow-hidden flex items-start justify-center bg-muted/30 min-h-0">
             {isGenerating && previewImage ? (
               // Show preview during generation
@@ -160,23 +193,23 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
                   onClick={() => setFullViewOpen(true)}
                 />
 
-                {/* Navigation arrows */}
-                {canGoPrev && (
-                  <Button
-                    variant="secondary"
-                    size="icon"
-                    className="absolute left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => { e.stopPropagation(); handleNavigate(-1); }}
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </Button>
-                )}
+                {/* Navigation arrows - left=newer, right=older */}
                 {canGoNext && (
                   <Button
                     variant="secondary"
                     size="icon"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={(e) => { e.stopPropagation(); handleNavigate(1); }}
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </Button>
+                )}
+                {canGoPrev && (
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => { e.stopPropagation(); handleNavigate(-1); }}
                   >
                     <ChevronRight className="h-5 w-5" />
                   </Button>
@@ -222,7 +255,7 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
 
         {/* Metadata panel - side by side on large screens */}
         {displayImage && (
-          <div className="lg:flex-1 lg:max-w-xs border rounded-lg overflow-hidden flex flex-col min-h-0">
+          <div className={cn("border rounded-lg overflow-hidden flex flex-col min-h-0", ratioConfig.metadataClass)}>
             <ImageDetailsPanel
               metadata={displayImage.metadata}
               onDownload={() => handleDownload(displayImage)}

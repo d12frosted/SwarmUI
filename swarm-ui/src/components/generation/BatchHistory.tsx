@@ -35,7 +35,7 @@ interface BatchHistoryProps {
 export function BatchHistory({ onImageSelect, selectedIndex }: BatchHistoryProps) {
   const { batch, removeFromBatch } = useGenerationStore();
   const { sessionId } = useSessionStore();
-  const [size, setSize] = useState<ThumbnailSize>("L");
+  const [size, setSize] = useState<ThumbnailSize>("S");
   const [deleteTarget, setDeleteTarget] = useState<{ image: GeneratedImage; index: number } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 

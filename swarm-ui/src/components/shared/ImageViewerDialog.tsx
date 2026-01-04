@@ -61,23 +61,23 @@ export function ImageViewerDialog({
               className="max-w-full max-h-[90vh] object-contain"
             />
 
-            {/* Navigation arrows */}
-            {canGoPrev && (
-              <Button
-                variant="secondary"
-                size="icon"
-                className="absolute left-4 top-1/2 -translate-y-1/2"
-                onClick={() => onNavigate?.(-1)}
-              >
-                <ChevronLeft className="h-6 w-6" />
-              </Button>
-            )}
+            {/* Navigation arrows - left=newer, right=older */}
             {canGoNext && (
               <Button
                 variant="secondary"
                 size="icon"
-                className="absolute right-4 top-1/2 -translate-y-1/2"
+                className="absolute left-4 top-1/2 -translate-y-1/2"
                 onClick={() => onNavigate?.(1)}
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </Button>
+            )}
+            {canGoPrev && (
+              <Button
+                variant="secondary"
+                size="icon"
+                className="absolute right-4 top-1/2 -translate-y-1/2"
+                onClick={() => onNavigate?.(-1)}
               >
                 <ChevronRight className="h-6 w-6" />
               </Button>

@@ -59,7 +59,7 @@ export function BatchHistory({ onImageSelect, selectedIndex }: BatchHistoryProps
     const imagePath = image.image.replace(/^\/Output\//, "");
     try {
       const result = await toggleImageStarred(imagePath, sessionId);
-      setStarredImages(prev => ({ ...prev, [image.image]: result.starred }));
+      setStarredImages(prev => ({ ...prev, [image.image]: result.new_state }));
     } catch (error) {
       console.error("Failed to toggle star:", error);
     }

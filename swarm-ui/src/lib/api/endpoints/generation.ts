@@ -50,8 +50,8 @@ export async function addImageToHistory(
 export async function toggleImageStarred(
   imageSrc: string,
   sessionId: string
-): Promise<{ starred: boolean }> {
-  return apiRequest<{ starred: boolean }>("ToggleImageStarred", {
+): Promise<{ new_state: boolean }> {
+  return apiRequest<{ new_state: boolean }>("ToggleImageStarred", {
     path: imageSrc,
   }, { sessionId });
 }

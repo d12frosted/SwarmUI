@@ -384,7 +384,7 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
 
     try {
       const result = await toggleImageStarred(image.fullPath, sessionId);
-      setStarredImages(prev => ({ ...prev, [image.fullPath]: result.starred }));
+      setStarredImages(prev => ({ ...prev, [image.fullPath]: result.new_state }));
     } catch (error) {
       console.error("Failed to toggle star:", error);
     }

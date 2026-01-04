@@ -68,6 +68,7 @@ export const useParametersStore = create<ParametersState>()(
 
       loadParams: async (sessionId: string) => {
         if (get().isLoading) return;
+        if (!sessionId) return;
 
         set({ isLoading: true, error: null });
 

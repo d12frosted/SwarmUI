@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParametersStore } from "@/stores/parameters";
+import { useSessionStore } from "@/stores/session";
 import { MainLayout } from "@/components/layout";
 import { ParameterPanel, PromptInput, ResolutionSelector, SliderInput, NumberInput, DropdownInput } from "@/components/parameters";
 import { ModelSelector } from "@/components/models/ModelSelector";
@@ -14,7 +15,15 @@ import { useTokenCount } from "@/hooks";
 import type { GeneratedImage } from "@/types/api";
 
 export default function GeneratePage() {
-  const { values, setValue, paramTypes } = useParametersStore();
+  const { sessionId, isInitialized } = useSessionStore();
+  const { values, setValue, paramTypes, isLoaded, isLoading, loadParams } = useParametersStore();
+
+  // Load parameters on mount
+  useEffect(() => {
+    if (isInitialized && sessionId && !isLoaded && !isLoading) {
+      loadParams(sessionId);
+    }
+  }, [isInitialized, sessionId, isLoaded, isLoading, loadParams]);
 
   // Get dropdown options from param types
   const samplerOptions = paramTypes.find(p => p.id === "sampler")?.values || [];

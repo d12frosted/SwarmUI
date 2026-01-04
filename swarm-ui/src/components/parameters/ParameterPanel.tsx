@@ -37,7 +37,7 @@ export function ParameterPanel({ showAdvanced = false, filterGroup }: ParameterP
   const [searchQuery, setSearchQuery] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  // Load parameters on mount
+  // Load parameters on mount (backup - main loading is in generate page)
   useEffect(() => {
     if (isInitialized && sessionId && !isLoaded && !isLoading) {
       loadParams(sessionId);

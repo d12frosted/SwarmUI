@@ -103,14 +103,14 @@ export function ImageResult({ className }: ImageResultProps) {
   return (
     <div className={`flex flex-col h-full ${className}`}>
       {/* Main Image Display */}
-      <div className="flex-1 relative rounded-lg overflow-hidden flex items-center justify-center">
+      <div className="flex-1 relative rounded-lg overflow-hidden flex items-start justify-center">
         {isGenerating && previewImage ? (
           // Show preview during generation - scale up to fill container
-          <div className="relative w-full h-full">
+          <div className="relative w-full max-h-full">
             <img
               src={previewImage}
               alt="Generation preview"
-              className="w-full h-full object-contain rounded-lg"
+              className="w-full max-h-full object-contain rounded-lg"
             />
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="text-center text-white bg-black/50 px-4 py-2 rounded-lg">
@@ -125,11 +125,11 @@ export function ImageResult({ className }: ImageResultProps) {
           </div>
         ) : displayImage ? (
           // Show generated image
-          <div className="relative w-full h-full group">
+          <div className="relative w-full max-h-full group">
             <img
               src={displayImage.image}
               alt="Generated image"
-              className="w-full h-full object-contain cursor-pointer rounded-lg"
+              className="w-full max-h-full object-contain cursor-pointer rounded-lg"
               onClick={() => handleOpenFullView(displayImage)}
             />
             {/* Overlay actions */}

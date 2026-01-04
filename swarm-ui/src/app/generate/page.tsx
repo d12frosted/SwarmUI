@@ -38,9 +38,9 @@ export default function GeneratePage() {
     <MainLayout>
       {/* Main Content - 3 column layout */}
       <div className="px-3 py-3 h-full overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 h-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[1fr] gap-3 h-full">
           {/* Left Panel - Parameters */}
-          <div className="lg:col-span-3 h-full overflow-hidden">
+          <div className="lg:col-span-3 h-full overflow-hidden isolate">
             <Card className="h-full flex flex-col">
               <Tabs defaultValue="main" className="h-full flex flex-col">
                 <div className="flex items-center justify-between px-3 py-2 border-b shrink-0">
@@ -172,24 +172,24 @@ export default function GeneratePage() {
           </div>
 
           {/* Center Panel - Image Result */}
-          <div className="lg:col-span-6 h-full overflow-hidden">
+          <div className="lg:col-span-6 h-full overflow-hidden isolate">
             <Card className="h-full flex flex-col">
               <div className="px-3 py-2 border-b shrink-0">
                 <span className="text-sm font-medium">Result</span>
               </div>
-              <CardContent className="flex-1 p-3 overflow-hidden">
+              <CardContent className="flex-1 p-3 min-h-0 overflow-hidden">
                 <ImageResult className="h-full" />
               </CardContent>
             </Card>
           </div>
 
           {/* Right Panel - History */}
-          <div className="lg:col-span-3 h-full overflow-hidden">
-            <Card className="h-full flex flex-col">
+          <div className="lg:col-span-3 h-full overflow-hidden isolate">
+            <Card className="h-full flex flex-col overflow-hidden">
               <div className="px-3 py-2 border-b shrink-0">
                 <span className="text-sm font-medium">History</span>
               </div>
-              <CardContent className="flex-1 p-3 overflow-auto">
+              <CardContent className="flex-1 p-3 min-h-0 overflow-hidden">
                 <BatchHistory
                   onImageSelect={handleBatchImageSelect}
                   selectedIndex={selectedBatchIndex}

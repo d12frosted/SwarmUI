@@ -37,7 +37,7 @@ export function BatchHistory({ onImageSelect, selectedIndex }: BatchHistoryProps
   }
 
   return (
-    <div className="h-full flex flex-col min-h-0">
+    <div className="h-full flex flex-col min-h-0 overflow-hidden">
       {/* Header with count, size selector, and clear */}
       <div className="flex items-center justify-between mb-2 shrink-0 gap-2">
         <span className="text-xs text-muted-foreground">

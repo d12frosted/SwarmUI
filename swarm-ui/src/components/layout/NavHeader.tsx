@@ -5,7 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useStatusStore } from "@/stores/status";
 import { useDownloadsStore, formatSpeed, formatBytes, formatElapsed, estimateTimeRemainingFromBytes } from "@/stores/downloads";
+import { useGenerationStore } from "@/stores/generation";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
   Tooltip,
@@ -19,7 +21,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { Sparkles, Sliders, FolderOpen, Settings, Server, Wrench, Download, CheckCircle2, XCircle } from "lucide-react";
+import { Sparkles, Sliders, FolderOpen, Settings, Server, Wrench, Download, CheckCircle2, XCircle, Image, Loader2, X, Repeat, Clock } from "lucide-react";
 
 const navItems = [
   { href: "/generate", label: "Generate", icon: Sparkles },
@@ -34,19 +36,27 @@ export function NavHeader() {
   const pathname = usePathname();
   const { waitingGens, liveGens, loadingModels } = useStatusStore();
   const { downloads } = useDownloadsStore();
+  const {
+    currentRequest,
+    isGenerating,
+    isGeneratingForever,
+    batch,
+    cancelGeneration
+  } = useGenerationStore();
 
   const activeDownloads = downloads.filter(
     (d) => d.status === "downloading" || d.status === "pending"
   );
   const hasDownloads = downloads.length > 0;
+  const hasGenerationActivity = isGenerating || batch.length > 0;
 
-  // Force re-render every second while downloads are active to update elapsed time
+  // Force re-render every second while downloads or generations are active
   const [, setTick] = useState(0);
   useEffect(() => {
-    if (activeDownloads.length === 0) return;
+    if (activeDownloads.length === 0 && !isGenerating) return;
     const interval = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(interval);
-  }, [activeDownloads.length]);
+  }, [activeDownloads.length, isGenerating]);
 
   return (
     <header className="border-b bg-card shrink-0">
@@ -91,6 +101,142 @@ export function NavHeader() {
 
         {/* Status badges - hide text on mobile */}
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          {/* Generation Indicator */}
+          {hasGenerationActivity && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 rounded-md text-xs sm:text-sm font-medium transition-colors",
+                    isGenerating
+                      ? "bg-purple-500/10 text-purple-500 hover:bg-purple-500/20"
+                      : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  {isGenerating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Image className="h-4 w-4" />
+                  )}
+                  {batch.length > 0 && (
+                    <span>{batch.length}</span>
+                  )}
+                  {isGeneratingForever && (
+                    <Repeat className="h-3 w-3" />
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-2" align="end">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-2 py-1">
+                    <p className="text-sm font-medium">Generation</p>
+                    {isGenerating && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={cancelGeneration}
+                      >
+                        <X className="h-3 w-3 mr-1" />
+                        Cancel
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Current Generation */}
+                  {currentRequest && (
+                    <div className="p-2 rounded-md bg-muted/50 space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium flex items-center gap-1.5">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Generating...
+                          {isGeneratingForever && (
+                            <Badge variant="outline" className="text-xs ml-1">
+                              <Repeat className="h-2.5 w-2.5 mr-0.5" />
+                              Forever
+                            </Badge>
+                          )}
+                        </span>
+                        {waitingGens > 0 && (
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {waitingGens} queued
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Progress */}
+                      {currentRequest.progress && (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <Progress
+                              value={currentRequest.progress.current_percent * 100}
+                              className="h-1.5 flex-1"
+                            />
+                            <span className="text-xs text-muted-foreground w-12 text-right">
+                              {Math.round(currentRequest.progress.current_percent * 100)}%
+                            </span>
+                          </div>
+                          {currentRequest.progress.batch_index > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              Image {currentRequest.progress.batch_index + 1} • Overall {Math.round(currentRequest.progress.overall_percent * 100)}%
+                            </p>
+                          )}
+                        </>
+                      )}
+
+                      {/* Preview thumbnail */}
+                      {currentRequest.previewImage && (
+                        <div className="relative aspect-square w-full max-w-[120px] rounded overflow-hidden bg-muted mx-auto">
+                          <img
+                            src={currentRequest.previewImage}
+                            alt="Preview"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      )}
+
+                      {/* Elapsed time */}
+                      <p className="text-xs text-muted-foreground text-center">
+                        {formatElapsed(currentRequest.startTime)} elapsed
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Recent batch */}
+                  {batch.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground px-2">
+                        Recent ({batch.length} images)
+                      </p>
+                      <div className="grid grid-cols-4 gap-1 px-1">
+                        {batch.slice(-8).map((img, idx) => (
+                          <div
+                            key={idx}
+                            className="aspect-square rounded overflow-hidden bg-muted"
+                          >
+                            <img
+                              src={img.image}
+                              alt={`Generated ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* No activity */}
+                  {!isGenerating && batch.length === 0 && (
+                    <p className="text-sm text-muted-foreground px-2 py-1">
+                      No active generations
+                    </p>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+
           {/* Download Indicator */}
           {hasDownloads && (
             <Popover>
@@ -180,20 +326,12 @@ export function NavHeader() {
               </PopoverContent>
             </Popover>
           )}
-          {loadingModels > 0 && (
+          {/* Model Loading Badge - only show when no generation popover */}
+          {loadingModels > 0 && !hasGenerationActivity && (
             <Badge variant="secondary" className="text-xs sm:text-sm">
+              <Loader2 className="h-3 w-3 animate-spin mr-1" />
               <span className="hidden sm:inline">Loading model...</span>
               <span className="sm:hidden">Loading</span>
-            </Badge>
-          )}
-          {liveGens > 0 && (
-            <Badge variant="default" className="text-xs sm:text-sm">
-              {liveGens} <span className="hidden sm:inline">generating</span>
-            </Badge>
-          )}
-          {waitingGens > 0 && (
-            <Badge variant="outline" className="text-xs sm:text-sm">
-              {waitingGens} <span className="hidden sm:inline">queued</span>
             </Badge>
           )}
         </div>

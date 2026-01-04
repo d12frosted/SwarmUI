@@ -43,6 +43,14 @@ export function LoraManager({ className }: LoraManagerProps) {
     }
   }, [sessionId, isLoaded, isLoading, loadLoras]);
 
+  // Sync selected LoRAs from persisted params after LoRAs are loaded
+  const { syncFromParams } = useLoraStore();
+  useEffect(() => {
+    if (isLoaded && selectedLoras.length === 0) {
+      syncFromParams();
+    }
+  }, [isLoaded, selectedLoras.length, syncFromParams]);
+
   const filteredLoras = getFilteredLoras();
 
   return (

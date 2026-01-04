@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { useSessionStore } from "@/stores/session";
 import { useParametersStore } from "@/stores/parameters";
 import { useLoraStore } from "@/stores/loras";
@@ -82,6 +83,7 @@ const orientationConfig: Record<"landscape" | "portrait" | "square", string> = {
 };
 
 export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) {
+  const router = useRouter();
   const { sessionId } = useSessionStore();
 
   // Data state
@@ -339,13 +341,15 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
     }
   };
 
-  // Use config from image
+  // Use config from image and navigate to generate page
   const handleUseConfig = (image: OutputImage) => {
     if (image.metadata) {
       const config = extractConfigFromMetadata(image.metadata);
       useParametersStore.getState().setValues(config);
       // Sync LoRA UI from the updated parameters
       useLoraStore.getState().syncFromParams();
+      // Navigate to generate page
+      router.push("/generate");
     }
   };
 

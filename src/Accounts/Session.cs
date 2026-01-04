@@ -116,12 +116,19 @@ public class Session : IEquatable<Session>
         /// <summary>When this generation started (Unix milliseconds).</summary>
         public long StartTimeUnix = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
+        /// <summary>Latest preview image (base64 data URI).</summary>
+        public string PreviewImage = null;
+
         /// <summary>Updates the progress tracking fields.</summary>
-        public void UpdateProgress(int batchIndex, float overallPercent, float currentPercent)
+        public void UpdateProgress(int batchIndex, float overallPercent, float currentPercent, string preview = null)
         {
             BatchIndex = batchIndex;
             OverallPercent = overallPercent;
             CurrentPercent = currentPercent;
+            if (preview != null)
+            {
+                PreviewImage = preview;
+            }
         }
 
         /// <summary>The relevant original session.</summary>

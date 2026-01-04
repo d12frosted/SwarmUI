@@ -79,6 +79,7 @@ export interface ActiveGeneration {
   start_time: number;
   waiting_gens: number;
   live_gens: number;
+  preview: string | null;
 }
 
 export interface ActiveGenerationsResponse {

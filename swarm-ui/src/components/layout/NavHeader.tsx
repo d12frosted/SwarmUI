@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useStatusStore } from "@/stores/status";
@@ -54,15 +54,15 @@ export function NavHeader() {
     stopPolling
   } = useGenerationStore();
 
-  // Check for active generations on mount (only once per session)
-  const [hasCheckedReconnection, setHasCheckedReconnection] = useState(false);
+  // Check for active generations on mount (only once)
+  const hasCheckedRef = useRef(false);
   useEffect(() => {
-    if (sessionId && !hasCheckedReconnection && !currentRequest) {
+    if (sessionId && !hasCheckedRef.current) {
+      hasCheckedRef.current = true;
       console.log("[NavHeader] Checking for active generations...");
-      setHasCheckedReconnection(true);
       checkActiveGenerations(sessionId);
     }
-  }, [sessionId, hasCheckedReconnection, currentRequest, checkActiveGenerations]);
+  }, [sessionId, checkActiveGenerations]);
 
   // Start polling when reconnected
   useEffect(() => {
@@ -223,6 +223,17 @@ export function NavHeader() {
                         <p className="text-xs text-muted-foreground">
                           Image {reconnectedGeneration.batch_index + 1} • Overall {Math.round(reconnectedGeneration.overall_percent * 100)}%
                         </p>
+                      )}
+
+                      {/* Preview thumbnail */}
+                      {reconnectedGeneration.preview && (
+                        <div className="relative aspect-square w-full max-w-[120px] rounded overflow-hidden bg-muted mx-auto">
+                          <img
+                            src={reconnectedGeneration.preview}
+                            alt="Preview"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
                       )}
 
                       {/* Model info */}

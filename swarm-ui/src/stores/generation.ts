@@ -268,6 +268,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
   checkActiveGenerations: async (sessionId: string) => {
     try {
       const response = await getActiveGenerations(sessionId);
+      console.log("[Generation] GetActiveGenerations response:", response);
       const activeGen = response.generations.find(g => g.live_gens > 0 || g.waiting_gens > 0);
 
       if (activeGen) {

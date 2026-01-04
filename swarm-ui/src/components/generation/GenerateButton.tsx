@@ -133,6 +133,8 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
           if (Object.keys(metadata).length === 0) {
             metadata = { ...input };
           }
+          // Add generation timestamp for session filtering
+          metadata.generation_time = Date.now();
 
           // Backend returns URLs like "/Output/..." - use as-is if starting with / or data:
           const finalUrl = imageUrl.startsWith("data:") || imageUrl.startsWith("/")
@@ -179,6 +181,8 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
             if (Object.keys(metadata).length === 0) {
               metadata = { ...input };
             }
+            // Add generation timestamp for session filtering
+            metadata.generation_time = Date.now();
 
             // Backend returns URLs like "/Output/..." - use as-is if starting with / or data:
             const finalUrl = imageUrl.startsWith("data:") || imageUrl.startsWith("/")

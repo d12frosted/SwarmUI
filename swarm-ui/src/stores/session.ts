@@ -8,6 +8,7 @@ import { getNewSession, getMyUserData, login, logout } from "@/lib/api";
 interface SessionState {
   // Session data
   sessionId: string | null;
+  sessionStartTime: number | null; // Unix timestamp when session was created
   userId: string | null;
   permissions: string[];
   version: string | null;
@@ -24,6 +25,7 @@ interface SessionState {
 
   // Actions
   initialize: () => Promise<void>;
+  createNewSession: () => Promise<void>;
   loginUser: (username: string, password: string) => Promise<boolean>;
   logoutUser: () => Promise<void>;
   refreshUserData: () => Promise<void>;
@@ -36,6 +38,7 @@ export const useSessionStore = create<SessionState>()(
     (set, get) => ({
       // Initial state
       sessionId: null,
+      sessionStartTime: null,
       userId: null,
       permissions: [],
       version: null,
@@ -80,6 +83,7 @@ export const useSessionStore = create<SessionState>()(
 
           set({
             sessionId: session.session_id,
+            sessionStartTime: Date.now(),
             userId: session.user_id,
             permissions: session.permissions,
             version: session.version,
@@ -95,6 +99,39 @@ export const useSessionStore = create<SessionState>()(
           set({
             error: error instanceof Error ? error.message : "Failed to initialize session",
             isInitialized: true,
+          });
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      createNewSession: async () => {
+        set({ isLoading: true, error: null });
+
+        try {
+          // Clear existing session and force create a new one
+          console.log("[Session] Creating new session (user requested)");
+
+          const session = await getNewSession();
+          console.log("[Session] Created new session:", session.session_id);
+
+          set({
+            sessionId: session.session_id,
+            sessionStartTime: Date.now(),
+            userId: session.user_id,
+            permissions: session.permissions,
+            version: session.version,
+            serverId: session.server_id,
+            outputAppendUser: session.output_append_user,
+            isInitialized: true,
+          });
+
+          // Fetch user data
+          const userData = await getMyUserData(session.session_id);
+          set({ userData });
+        } catch (error) {
+          set({
+            error: error instanceof Error ? error.message : "Failed to create new session",
           });
         } finally {
           set({ isLoading: false });
@@ -138,6 +175,7 @@ export const useSessionStore = create<SessionState>()(
 
         set({
           sessionId: null,
+          sessionStartTime: null,
           userId: null,
           permissions: [],
           userData: null,
@@ -176,6 +214,7 @@ export const useSessionStore = create<SessionState>()(
       storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         sessionId: state.sessionId,
+        sessionStartTime: state.sessionStartTime,
         userId: state.userId,
         permissions: state.permissions,
         version: state.version,

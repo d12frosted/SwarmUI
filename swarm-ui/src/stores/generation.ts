@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import type { GeneratedImage, GenerationProgress, ActiveGeneration } from "@/types/api";
-import { getActiveGenerations } from "@/lib/api";
+import { getActiveGenerations, listImages } from "@/lib/api";
 
 export interface GenerationRequest {
   id: string;
@@ -60,9 +60,12 @@ interface GenerationState {
   resetQueue: () => void;
 
   // Reconnection actions
-  checkActiveGenerations: (sessionId: string) => Promise<void>;
+  checkActiveGenerations: (sessionId: string, sessionStartTime?: number) => Promise<void>;
   startPolling: (sessionId: string, interval?: number) => void;
   stopPolling: () => void;
+
+  // Session image loading
+  loadSessionImages: (sessionId: string, sessionStartTime: number) => Promise<void>;
 }
 
 function generateId(): string {
@@ -265,7 +268,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     set({ queuedCount: 0 });
   },
 
-  checkActiveGenerations: async (sessionId: string) => {
+  checkActiveGenerations: async (sessionId: string, sessionStartTime?: number) => {
     try {
       const response = await getActiveGenerations(sessionId);
       console.log("[Generation] GetActiveGenerations response:", response);
@@ -278,7 +281,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
           isGenerating: true,
           isReconnected: true,
           reconnectedGeneration: activeGen,
-          queuedCount: activeGen.waiting_gens,
+          queuedCount: Math.max(0, activeGen.waiting_gens - activeGen.live_gens),
         });
       } else {
         // No active generations
@@ -286,6 +289,12 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
           isReconnected: false,
           reconnectedGeneration: null,
         });
+
+        // If batch is empty and we have a valid session start time, load session images
+        const { batch } = get();
+        if (batch.length === 0 && sessionStartTime && sessionStartTime > 0) {
+          get().loadSessionImages(sessionId, sessionStartTime);
+        }
       }
     } catch (error) {
       console.error("Failed to check active generations:", error);
@@ -316,10 +325,48 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
           // Update progress
           set({
             reconnectedGeneration: activeGen,
-            queuedCount: Math.max(0, activeGen.waiting_gens),
+            queuedCount: Math.max(0, activeGen.waiting_gens - activeGen.live_gens),
           });
         } else {
-          // Generation complete
+          // Generation complete - fetch recent images
+          const { reconnectedGeneration } = get();
+          const generationStartTime = reconnectedGeneration?.start_time || 0;
+
+          try {
+            // Fetch recent images sorted by date (newest first)
+            const imagesResponse = await listImages({
+              path: "",
+              depth: 2,
+              sortBy: "date",
+              sortReverse: true,
+              limit: 20,
+            }, sessionId);
+
+            // Add recent images to batch
+            const newImages: GeneratedImage[] = [];
+            for (const file of imagesResponse.files) {
+              // Create GeneratedImage from the file
+              // file.src is relative path like "2025-01-04/image.png", need to prefix with /Output/
+              const image: GeneratedImage = {
+                image: `/Output/${file.src}`,
+                metadata: file.metadata || { prompt: "", model: "", seed: 0, steps: 0, cfgscale: 0, width: 0, height: 0 },
+                batch_id: `reconnect-${generationStartTime}`,
+              };
+              newImages.push(image);
+              // Only add a few images to avoid flooding
+              if (newImages.length >= 5) break;
+            }
+
+            if (newImages.length > 0) {
+              console.log("[Generation] Adding", newImages.length, "images from reconnected generation");
+              set((state) => ({
+                batch: [...state.batch, ...newImages],
+              }));
+            }
+          } catch (error) {
+            console.error("Failed to fetch recent images:", error);
+          }
+
           set({
             isGenerating: false,
             isReconnected: false,
@@ -341,6 +388,73 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     if (pollIntervalId) {
       clearInterval(pollIntervalId);
       pollIntervalId = null;
+    }
+  },
+
+  loadSessionImages: async (sessionId: string, sessionStartTime: number) => {
+    try {
+      console.log("[Generation] Loading images from session started at", sessionStartTime ? new Date(sessionStartTime).toISOString() : "unknown");
+
+      // Fetch recent images sorted by date (newest first)
+      // Use depth: 5 to search into date subfolders like 2025-01-04/
+      const imagesResponse = await listImages({
+        path: "",
+        depth: 5,
+        sortBy: "date",
+        sortReverse: true,
+      }, sessionId);
+
+      console.log("[Generation] ListImages response:", imagesResponse.files.length, "files,", imagesResponse.folders.length, "folders");
+      if (imagesResponse.folders.length > 0) {
+        console.log("[Generation] Folders found:", imagesResponse.folders.slice(0, 5));
+      }
+
+      // Filter to images created after session start time
+      const filteredFiles = imagesResponse.files.filter(file => {
+        // First check if metadata has generation_time (set by our UI)
+        const genTime = file.metadata?.generation_time as number | undefined;
+        if (genTime && genTime >= sessionStartTime) {
+          return true;
+        }
+
+        // Fallback: parse date from file path (e.g., "raw/2026-01-04/..." or "2026-01-04/...")
+        const sessionStartDate = new Date(sessionStartTime);
+        sessionStartDate.setHours(0, 0, 0, 0); // Start of the session day
+
+        const dateMatch = file.src.match(/(\d{4}-\d{2}-\d{2})/);
+        if (dateMatch) {
+          const fileDate = new Date(dateMatch[1]);
+          return fileDate >= sessionStartDate;
+        }
+        // If no date in path, exclude (likely an example/input file)
+        return false;
+      });
+
+      console.log("[Generation] Filtered to", filteredFiles.length, "files after session start");
+
+      // Take the most recent images (from the end since API returns oldest first)
+      const recentFiles = filteredFiles.slice(-20);
+      const newImages: GeneratedImage[] = [];
+      for (const file of recentFiles) {
+        const metadata = file.metadata;
+
+        const image: GeneratedImage = {
+          image: `/Output/${file.src}`,
+          metadata: metadata || { prompt: "", model: "", seed: 0, steps: 0, cfgscale: 0, width: 0, height: 0 },
+          batch_id: `session-${sessionStartTime}`,
+        };
+        newImages.push(image);
+      }
+
+      if (newImages.length > 0) {
+        console.log("[Generation] Loaded", newImages.length, "images from session");
+        // Show newest first (descending order)
+        set({ batch: newImages });
+      } else {
+        console.log("[Generation] No images found to load");
+      }
+    } catch (error) {
+      console.error("Failed to load session images:", error);
     }
   },
 }));

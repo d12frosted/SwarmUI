@@ -21,7 +21,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { Sparkles, Sliders, FolderOpen, Settings, Server, Wrench, Download, CheckCircle2, XCircle, Image, Loader2, X, Repeat, Clock, RefreshCw } from "lucide-react";
+import { Sparkles, Sliders, FolderOpen, Settings, Server, Wrench, Download, CheckCircle2, XCircle, Image, Loader2, X, Repeat, Clock, RefreshCw, Plus } from "lucide-react";
 import { useSessionStore } from "@/stores/session";
 import { interruptAll } from "@/lib/api";
 
@@ -36,7 +36,7 @@ const navItems = [
 
 export function NavHeader() {
   const pathname = usePathname();
-  const { sessionId } = useSessionStore();
+  const { sessionId, sessionStartTime, createNewSession } = useSessionStore();
   const { waitingGens, liveGens, loadingModels } = useStatusStore();
   const { downloads } = useDownloadsStore();
   const {
@@ -49,6 +49,7 @@ export function NavHeader() {
     batch,
     cancelGeneration,
     resetQueue,
+    clearBatch,
     checkActiveGenerations,
     startPolling,
     stopPolling
@@ -60,9 +61,9 @@ export function NavHeader() {
     if (sessionId && !hasCheckedRef.current) {
       hasCheckedRef.current = true;
       console.log("[NavHeader] Checking for active generations...");
-      checkActiveGenerations(sessionId);
+      checkActiveGenerations(sessionId, sessionStartTime || undefined);
     }
-  }, [sessionId, checkActiveGenerations]);
+  }, [sessionId, sessionStartTime, checkActiveGenerations]);
 
   // Start polling when reconnected
   useEffect(() => {
@@ -132,9 +133,8 @@ export function NavHeader() {
 
         {/* Status badges - hide text on mobile */}
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-          {/* Generation Indicator */}
-          {hasGenerationActivity && (
-            <Popover>
+          {/* Generation Indicator - always show for session management */}
+          <Popover>
               <PopoverTrigger asChild>
                 <button
                   className={cn(
@@ -201,10 +201,10 @@ export function NavHeader() {
                           <Loader2 className="h-3 w-3 animate-spin" />
                           Generating...
                         </span>
-                        {reconnectedGeneration.waiting_gens > 0 && (
+                        {(reconnectedGeneration.waiting_gens - reconnectedGeneration.live_gens) > 0 && (
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {reconnectedGeneration.waiting_gens} queued
+                            {reconnectedGeneration.waiting_gens - reconnectedGeneration.live_gens} queued
                           </span>
                         )}
                       </div>
@@ -313,9 +313,23 @@ export function NavHeader() {
                   {/* Recent batch */}
                   {batch.length > 0 && (
                     <div className="space-y-1.5">
-                      <p className="text-xs text-muted-foreground px-2">
-                        Recent ({batch.length} images)
-                      </p>
+                      <div className="flex items-center justify-between px-2">
+                        <p className="text-xs text-muted-foreground">
+                          Recent ({batch.length} images)
+                        </p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 px-1.5 text-xs"
+                          onClick={() => {
+                            clearBatch();
+                            createNewSession();
+                          }}
+                        >
+                          <Plus className="h-3 w-3 mr-0.5" />
+                          New
+                        </Button>
+                      </div>
                       <div className="grid grid-cols-4 gap-1 px-1">
                         {batch.slice(-8).map((img, idx) => (
                           <div
@@ -335,14 +349,27 @@ export function NavHeader() {
 
                   {/* No activity */}
                   {!isGenerating && batch.length === 0 && (
-                    <p className="text-sm text-muted-foreground px-2 py-1">
-                      No active generations
-                    </p>
+                    <div className="flex items-center justify-between px-2 py-1">
+                      <p className="text-sm text-muted-foreground">
+                        No active generations
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => {
+                          clearBatch();
+                          createNewSession();
+                        }}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        New Session
+                      </Button>
+                    </div>
                   )}
                 </div>
               </PopoverContent>
-            </Popover>
-          )}
+          </Popover>
 
           {/* Download Indicator */}
           {hasDownloads && (

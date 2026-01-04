@@ -88,7 +88,7 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
 
         // Handle generated images - image field can be object {image, batch_index, metadata} or string
         if (message.image) {
-          console.log("[Gen] Final image raw:", message.image);
+          console.log("[Gen] Final image message:", JSON.stringify(message.image, null, 2));
 
           // Handle both object and string formats
           const imgData = message.image;
@@ -115,6 +115,8 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
           const finalUrl = imageUrl.startsWith("data:") || imageUrl.startsWith("/")
             ? imageUrl
             : `/${imageUrl}`;
+
+          console.log("[Gen] Image URL - raw:", imageUrl, "final:", finalUrl);
 
           const generatedImage: GeneratedImage = {
             image: finalUrl,

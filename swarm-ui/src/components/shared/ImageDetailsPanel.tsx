@@ -1,7 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Copy, Download, Paintbrush, RotateCcw } from "lucide-react";
+import { Copy, Download, Paintbrush, RotateCcw, Star, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { ImageMetadata } from "@/types/api";
 
 interface ImageDetailsPanelProps {
@@ -10,6 +11,9 @@ interface ImageDetailsPanelProps {
   onDownload?: () => void;
   onEdit?: () => void;
   onUseConfig?: () => void;
+  onStar?: () => void;
+  onDelete?: () => void;
+  isStarred?: boolean;
   showActions?: boolean;
   className?: string;
 }
@@ -19,6 +23,9 @@ export function ImageDetailsPanel({
   onDownload,
   onEdit,
   onUseConfig,
+  onStar,
+  onDelete,
+  isStarred = false,
   showActions = true,
   className,
 }: ImageDetailsPanelProps) {
@@ -48,7 +55,7 @@ export function ImageDetailsPanel({
     <div className={className}>
       {/* Actions */}
       {showActions && (
-        <div className="flex gap-2 p-4 border-b shrink-0">
+        <div className="flex gap-2 p-4 border-b shrink-0 flex-wrap">
           {onDownload && (
             <Button variant="outline" size="sm" onClick={onDownload}>
               <Download className="h-4 w-4 mr-1" />
@@ -61,10 +68,32 @@ export function ImageDetailsPanel({
               Use Config
             </Button>
           )}
+          {onStar && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onStar}
+              className={cn(isStarred && "bg-yellow-500/20 text-yellow-600 border-yellow-500/50")}
+            >
+              <Star className={cn("h-4 w-4 mr-1", isStarred && "fill-current")} />
+              {isStarred ? "Starred" : "Star"}
+            </Button>
+          )}
           {onEdit && (
             <Button variant="outline" size="sm" onClick={onEdit}>
               <Paintbrush className="h-4 w-4 mr-1" />
               Edit
+            </Button>
+          )}
+          {onDelete && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDelete}
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete
             </Button>
           )}
         </div>

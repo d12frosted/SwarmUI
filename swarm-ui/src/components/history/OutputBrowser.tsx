@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSessionStore } from "@/stores/session";
 import { useParametersStore } from "@/stores/parameters";
 import { useLoraStore } from "@/stores/loras";
-import { listImages } from "@/lib/api";
+import { listImages, toggleImageStarred, deleteImage } from "@/lib/api";
 import { extractConfigFromMetadata } from "@/lib/metadata";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Star,
+  Trash2,
   CalendarIcon,
   X,
   Grid3X3,
@@ -52,6 +53,16 @@ import {
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ImageDetailsPanel } from "@/components/shared";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { ImageMetadata } from "@/types/api";
 
 interface OutputImage {
@@ -109,6 +120,11 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
   const [selectedImage, setSelectedImage] = useState<OutputImage | null>(null);
   const [fullViewOpen, setFullViewOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+
+  // Star and delete state
+  const [starredImages, setStarredImages] = useState<Record<string, boolean>>({});
+  const [deleteTarget, setDeleteTarget] = useState<OutputImage | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Parse metadata from string or object
   const parseMetadata = (meta?: string | ImageMetadata): ImageMetadata | undefined => {
@@ -350,6 +366,49 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
       useLoraStore.getState().syncFromParams();
       // Navigate to generate page
       router.push("/generate");
+    }
+  };
+
+  // Check if image is starred
+  const isImageStarred = (image: OutputImage): boolean => {
+    if (image.fullPath in starredImages) {
+      return starredImages[image.fullPath];
+    }
+    const extraData = (image.metadata?.sui_extra_data || image.metadata?.Sui_extra_data || {}) as Record<string, unknown>;
+    return !!(image.metadata?.starred || extraData.starred);
+  };
+
+  // Toggle star status
+  const handleStar = async (image: OutputImage) => {
+    if (!sessionId) return;
+
+    try {
+      const result = await toggleImageStarred(image.fullPath, sessionId);
+      setStarredImages(prev => ({ ...prev, [image.fullPath]: result.starred }));
+    } catch (error) {
+      console.error("Failed to toggle star:", error);
+    }
+  };
+
+  // Delete image
+  const handleDelete = async () => {
+    if (!deleteTarget || !sessionId) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteImage(deleteTarget.fullPath, sessionId);
+      // Remove from local state
+      setAllImages(prev => prev.filter(img => img.fullPath !== deleteTarget.fullPath));
+      // Close full view if viewing the deleted image
+      if (selectedImage?.fullPath === deleteTarget.fullPath) {
+        setFullViewOpen(false);
+        setSelectedImage(null);
+      }
+    } catch (error) {
+      console.error("Failed to delete image:", error);
+    } finally {
+      setIsDeleting(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -595,18 +654,12 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
                     />
                   </div>
 
-                  {/* Starred indicator */}
-                  {(() => {
-                    const extraData = (image.metadata?.Sui_extra_data || image.metadata?.sui_extra_data || {}) as Record<string, unknown>;
-                    const isStarred = image.metadata?.starred ||
-                                      extraData.starred ||
-                                      image.fullPath.toLowerCase().includes("starred");
-                    return isStarred ? (
-                      <div className="absolute top-1 right-1">
-                        <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
-                      </div>
-                    ) : null;
-                  })()}
+                  {/* Starred indicator (always visible when starred) */}
+                  {isImageStarred(image) && (
+                    <div className="absolute top-1 left-1">
+                      <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
+                    </div>
+                  )}
 
                   {/* Hover overlay */}
                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
@@ -624,6 +677,17 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
                     <Button
                       variant="secondary"
                       size="icon"
+                      className={cn("h-7 w-7", isImageStarred(image) && "text-yellow-500")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStar(image);
+                      }}
+                    >
+                      <Star className={cn("h-4 w-4", isImageStarred(image) && "fill-current")} />
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="icon"
                       className="h-7 w-7"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -631,6 +695,17 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
                       }}
                     >
                       <Download className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteTarget(image);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
@@ -696,6 +771,9 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
                   metadata={selectedImage.metadata}
                   onDownload={() => handleDownload(selectedImage)}
                   onUseConfig={() => handleUseConfig(selectedImage)}
+                  onStar={() => handleStar(selectedImage)}
+                  onDelete={() => setDeleteTarget(selectedImage)}
+                  isStarred={isImageStarred(selectedImage)}
                   showActions={true}
                   className="flex-1 flex flex-col min-h-0 overflow-hidden"
                 />
@@ -704,6 +782,28 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Image</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the image from disk. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

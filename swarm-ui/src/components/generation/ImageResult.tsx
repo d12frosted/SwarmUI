@@ -7,7 +7,7 @@ import { useParametersStore } from "@/stores/parameters";
 import { useLoraStore } from "@/stores/loras";
 import { Button } from "@/components/ui/button";
 import { ImageViewerDialog, ImageDetailsPanel } from "@/components/shared";
-import { deleteImage } from "@/lib/api";
+import { deleteImage, toggleImageStarred } from "@/lib/api";
 import { extractConfigFromMetadata } from "@/lib/metadata";
 import {
   ZoomIn,
@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Trash2,
+  Star,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -50,6 +51,7 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [previewRatio, setPreviewRatio] = useState<PreviewRatio>("S");
+  const [starredImages, setStarredImages] = useState<Record<string, boolean>>({});
 
   const previewImage = currentRequest?.previewImage;
   const isGenerating = currentRequest?.status === "generating";
@@ -107,6 +109,29 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
       useParametersStore.getState().setValues(config);
       // Sync LoRA UI from the updated parameters
       useLoraStore.getState().syncFromParams();
+    }
+  };
+
+  // Check if image is starred (from local state or metadata)
+  const isImageStarred = (image: GeneratedImage): boolean => {
+    // Check local state first
+    if (image.image in starredImages) {
+      return starredImages[image.image];
+    }
+    // Fall back to metadata
+    const extraData = (image.metadata?.sui_extra_data || image.metadata?.Sui_extra_data || {}) as Record<string, unknown>;
+    return !!(image.metadata?.starred || extraData.starred);
+  };
+
+  const handleStar = async (image: GeneratedImage) => {
+    if (!sessionId || image.image.startsWith("data:")) return;
+
+    const imagePath = image.image.replace(/^\/Output\//, "");
+    try {
+      const result = await toggleImageStarred(imagePath, sessionId);
+      setStarredImages(prev => ({ ...prev, [image.image]: result.starred }));
+    } catch (error) {
+      console.error("Failed to toggle star:", error);
     }
   };
 
@@ -235,6 +260,15 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
                   <Button
                     variant="secondary"
                     size="icon"
+                    className={cn("h-8 w-8", isImageStarred(displayImage) && "text-yellow-500")}
+                    onClick={(e) => { e.stopPropagation(); handleStar(displayImage); }}
+                    title={isImageStarred(displayImage) ? "Unstar" : "Star"}
+                  >
+                    <Star className={cn("h-4 w-4", isImageStarred(displayImage) && "fill-current")} />
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="icon"
                     className="h-8 w-8 text-destructive hover:text-destructive"
                     onClick={(e) => { e.stopPropagation(); setDeleteDialogOpen(true); }}
                     title="Delete"
@@ -266,6 +300,9 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
               metadata={displayImage.metadata}
               onDownload={() => handleDownload(displayImage)}
               onUseConfig={() => handleUseConfig(displayImage)}
+              onStar={() => handleStar(displayImage)}
+              onDelete={() => setDeleteDialogOpen(true)}
+              isStarred={isImageStarred(displayImage)}
               showActions={true}
               className="flex-1 flex flex-col min-h-0 overflow-hidden"
             />
@@ -282,6 +319,9 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
           metadata={displayImage.metadata}
           onDownload={() => handleDownload(displayImage)}
           onUseConfig={() => handleUseConfig(displayImage)}
+          onStar={() => handleStar(displayImage)}
+          onDelete={() => setDeleteDialogOpen(true)}
+          isStarred={isImageStarred(displayImage)}
           showNavigation={batch.length > 1}
           currentIndex={currentIndex}
           totalCount={batch.length}

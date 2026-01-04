@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import { useGenerationStore } from "@/stores/generation";
 import { useSessionStore } from "@/stores/session";
-import { deleteImage } from "@/lib/api";
-import { Trash2 } from "lucide-react";
+import { deleteImage, toggleImageStarred } from "@/lib/api";
+import { Trash2, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -38,9 +38,32 @@ export function BatchHistory({ onImageSelect, selectedIndex }: BatchHistoryProps
   const [size, setSize] = useState<ThumbnailSize>("S");
   const [deleteTarget, setDeleteTarget] = useState<{ image: GeneratedImage; index: number } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [starredImages, setStarredImages] = useState<Record<string, boolean>>({});
 
   // Reverse batch so newest is first
   const reversedBatch = useMemo(() => [...batch].reverse(), [batch]);
+
+  // Check if image is starred
+  const isImageStarred = (image: GeneratedImage): boolean => {
+    if (image.image in starredImages) {
+      return starredImages[image.image];
+    }
+    const extraData = (image.metadata?.sui_extra_data || image.metadata?.Sui_extra_data || {}) as Record<string, unknown>;
+    return !!(image.metadata?.starred || extraData.starred);
+  };
+
+  const handleStar = async (e: React.MouseEvent, image: GeneratedImage) => {
+    e.stopPropagation();
+    if (!sessionId || image.image.startsWith("data:")) return;
+
+    const imagePath = image.image.replace(/^\/Output\//, "");
+    try {
+      const result = await toggleImageStarred(imagePath, sessionId);
+      setStarredImages(prev => ({ ...prev, [image.image]: result.starred }));
+    } catch (error) {
+      console.error("Failed to toggle star:", error);
+    }
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget || !sessionId) return;
@@ -127,17 +150,35 @@ export function BatchHistory({ onImageSelect, selectedIndex }: BatchHistoryProps
                 alt={`Generated image ${originalIndex + 1}`}
                 className="w-full h-auto object-contain"
               />
-              {/* Delete button */}
-              <button
-                className="absolute top-1 right-1 p-1 bg-black/50 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDeleteTarget({ image, index: originalIndex });
-                }}
-                title="Delete image"
-              >
-                <Trash2 className="h-3 w-3 text-white" />
-              </button>
+              {/* Action buttons */}
+              <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  className={cn(
+                    "p-1 bg-black/50 rounded hover:bg-black/70",
+                    isImageStarred(image) && "text-yellow-500"
+                  )}
+                  onClick={(e) => handleStar(e, image)}
+                  title={isImageStarred(image) ? "Unstar" : "Star"}
+                >
+                  <Star className={cn("h-3 w-3 text-white", isImageStarred(image) && "fill-yellow-500 text-yellow-500")} />
+                </button>
+                <button
+                  className="p-1 bg-black/50 rounded hover:bg-destructive"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteTarget({ image, index: originalIndex });
+                  }}
+                  title="Delete image"
+                >
+                  <Trash2 className="h-3 w-3 text-white" />
+                </button>
+              </div>
+              {/* Starred indicator (always visible when starred) */}
+              {isImageStarred(image) && (
+                <div className="absolute top-1 left-1">
+                  <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+                </div>
+              )}
               {/* Index badge */}
               <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/50 rounded text-[10px] text-white">
                 {originalIndex + 1}

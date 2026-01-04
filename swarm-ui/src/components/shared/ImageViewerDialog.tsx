@@ -19,6 +19,9 @@ interface ImageViewerDialogProps {
   onDownload?: () => void;
   onEdit?: () => void;
   onUseConfig?: () => void;
+  onStar?: () => void;
+  onDelete?: () => void;
+  isStarred?: boolean;
   // Navigation
   showNavigation?: boolean;
   currentIndex?: number;
@@ -36,6 +39,9 @@ export function ImageViewerDialog({
   onDownload,
   onEdit,
   onUseConfig,
+  onStar,
+  onDelete,
+  isStarred,
   showNavigation = false,
   currentIndex = 0,
   totalCount = 1,
@@ -107,7 +113,10 @@ export function ImageViewerDialog({
               onDownload={onDownload}
               onEdit={onEdit}
               onUseConfig={onUseConfig}
-              showActions={!!(onDownload || onEdit || onUseConfig)}
+              onStar={onStar}
+              onDelete={onDelete}
+              isStarred={isStarred}
+              showActions={!!(onDownload || onEdit || onUseConfig || onStar || onDelete)}
               className="flex-1 flex flex-col min-h-0 overflow-hidden"
             />
           </div>

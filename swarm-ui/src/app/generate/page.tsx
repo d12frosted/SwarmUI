@@ -45,9 +45,9 @@ export default function GeneratePage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[1fr] gap-3 h-full">
           {/* Left Panel - Parameters */}
           <div className="lg:col-span-3 h-full overflow-hidden isolate">
-            <Card className="h-full flex flex-col">
+            <Card className="h-full flex flex-col py-0">
               <Tabs defaultValue="main" className="h-full flex flex-col">
-                <div className="flex items-center justify-between px-3 py-2 border-b shrink-0">
+                <div className="flex items-center justify-between px-3 py-2 border-b shrink-0 min-h-[48px]">
                   <TabsList className="h-8">
                     <TabsTrigger value="main" className="text-xs px-3 h-7">Core</TabsTrigger>
                     <TabsTrigger value="all" className="text-xs px-3 h-7">Advanced</TabsTrigger>
@@ -178,6 +178,9 @@ export default function GeneratePage() {
           {/* Center Panel - Image Result */}
           <div className="lg:col-span-6 h-full overflow-hidden isolate">
             <Card className="h-full flex flex-col py-0">
+              <div className="flex items-center px-3 py-2 border-b shrink-0 min-h-[48px]">
+                <span className="text-sm font-medium">Preview</span>
+              </div>
               <CardContent className="flex-1 p-3 min-h-0 overflow-hidden">
                 <ImageResult
                   className="h-full"
@@ -191,6 +194,9 @@ export default function GeneratePage() {
           {/* Right Panel - History */}
           <div className="lg:col-span-3 h-full overflow-hidden isolate">
             <Card className="h-full flex flex-col overflow-hidden py-0">
+              <div className="flex items-center px-3 py-2 border-b shrink-0 min-h-[48px]">
+                <span className="text-sm font-medium">History</span>
+              </div>
               <CardContent className="flex-1 p-3 min-h-0 overflow-hidden">
                 <BatchHistory
                   onImageSelect={handleBatchImageSelect}

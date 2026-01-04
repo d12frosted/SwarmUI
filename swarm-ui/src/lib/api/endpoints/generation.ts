@@ -52,7 +52,7 @@ export async function toggleImageStarred(
   sessionId: string
 ): Promise<{ starred: boolean }> {
   return apiRequest<{ starred: boolean }>("ToggleImageStarred", {
-    image: imageSrc,
+    path: imageSrc,
   }, { sessionId });
 }
 

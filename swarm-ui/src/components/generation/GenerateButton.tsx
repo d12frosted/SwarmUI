@@ -40,8 +40,10 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
     cancelGeneration,
     setGeneratingForever,
   } = useGenerationStore();
+  const { updateFromWSMessage } = useStatusStore();
   const { getGenerationInput } = useParametersStore();
   const [lastError, setLastError] = useState<string | null>(null);
+  const [localQueueCount, setLocalQueueCount] = useState(0);
   const generateForeverRef = useRef(false);
 
   // Keep ref in sync with store
@@ -66,8 +68,18 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
     // Get generation parameters
     const input = getGenerationInput();
 
-    // Start generation in store
-    const requestId = startGeneration(input);
+    // If already generating, this is adding to queue
+    const isAddingToQueue = isGenerating;
+
+    // Only create new request if not adding to queue
+    const requestId = isAddingToQueue
+      ? `queue-${Date.now()}`  // Dummy ID for queued items
+      : startGeneration(input);
+
+    // Track local queue count
+    if (isAddingToQueue) {
+      setLocalQueueCount(prev => prev + 1);
+    }
 
     // Create WebSocket connection
     const client = new WSClient("GenerateText2ImageWS", {
@@ -75,21 +87,24 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
       onMessage: (data) => {
         const message = data as WSMessage;
 
-        // Handle progress updates
-        if (message.gen_progress) {
+        // Update status from WebSocket if available
+        if (message.status) {
+          updateFromWSMessage(message.status);
+        }
+
+        // Handle progress updates - only for main generation, not queued
+        if (message.gen_progress && !isAddingToQueue) {
           updateProgress(requestId, message.gen_progress);
           onProgress?.(message.gen_progress);
         }
 
-        // Handle preview image
-        if (message.gen_progress?.preview) {
+        // Handle preview image - only for main generation
+        if (message.gen_progress?.preview && !isAddingToQueue) {
           setPreviewImage(requestId, message.gen_progress.preview);
         }
 
         // Handle generated images - image field can be object {image, batch_index, metadata} or string
         if (message.image) {
-          console.log("[Gen] Final image message:", JSON.stringify(message.image, null, 2));
-
           // Handle both object and string formats
           const imgData = message.image;
           const imageUrl = typeof imgData === 'string'
@@ -97,7 +112,6 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
             : (imgData as { image?: string }).image;
 
           if (!imageUrl) {
-            console.warn("[Gen] No image URL found in message:", message.image);
             return;
           }
 
@@ -122,14 +136,20 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
             ? imageUrl
             : `/${imageUrl}`;
 
-          console.log("[Gen] Image URL - raw:", imageUrl, "final:", finalUrl);
-
           const generatedImage: GeneratedImage = {
             image: finalUrl,
             metadata: metadata as ImageMetadata,
             batch_id: requestId,
           };
-          addGeneratedImage(requestId, generatedImage);
+
+          // For queued items, add directly to batch without updating currentRequest
+          if (isAddingToQueue) {
+            useGenerationStore.setState(state => ({
+              batch: [...state.batch, generatedImage]
+            }));
+          } else {
+            addGeneratedImage(requestId, generatedImage);
+          }
           onImageGenerated?.(generatedImage);
         }
 
@@ -167,7 +187,14 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
               metadata: metadata as ImageMetadata,
               batch_id: requestId,
             };
-            addGeneratedImage(requestId, generatedImage);
+
+            if (isAddingToQueue) {
+              useGenerationStore.setState(state => ({
+                batch: [...state.batch, generatedImage]
+              }));
+            } else {
+              addGeneratedImage(requestId, generatedImage);
+            }
             onImageGenerated?.(generatedImage);
           }
         }
@@ -175,17 +202,24 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
         // Handle errors
         if (message.error) {
           setLastError(message.error);
-          failGeneration(requestId, message.error);
+          if (!isAddingToQueue) {
+            failGeneration(requestId, message.error);
+          }
           client.disconnect();
         }
       },
       onError: (error) => {
         setLastError(error.message);
-        failGeneration(requestId, error.message);
+        if (!isAddingToQueue) {
+          failGeneration(requestId, error.message);
+        }
       },
       onStateChange: (state) => {
         if (state === "completed" || state === "disconnected") {
-          if (useGenerationStore.getState().currentRequest?.id === requestId) {
+          // Decrement local queue count when a queued item completes
+          if (isAddingToQueue) {
+            setLocalQueueCount(prev => Math.max(0, prev - 1));
+          } else if (useGenerationStore.getState().currentRequest?.id === requestId) {
             completeGeneration(requestId);
             // If generate forever is enabled, start a new generation
             if (generateForeverRef.current) {
@@ -201,14 +235,19 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
     try {
       await client.connect(input);
     } catch (error) {
-      failGeneration(
-        requestId,
-        error instanceof Error ? error.message : "Failed to connect"
-      );
+      if (!isAddingToQueue) {
+        failGeneration(
+          requestId,
+          error instanceof Error ? error.message : "Failed to connect"
+        );
+      } else {
+        setLocalQueueCount(prev => Math.max(0, prev - 1));
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     sessionId,
+    isGenerating,
     getGenerationInput,
     startGeneration,
     updateProgress,
@@ -216,6 +255,7 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
     addGeneratedImage,
     completeGeneration,
     failGeneration,
+    updateFromWSMessage,
     onImageGenerated,
     onProgress,
   ]);
@@ -226,6 +266,7 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
     try {
       await interruptAll(sessionId);
       cancelGeneration();
+      setLocalQueueCount(0); // Reset local queue count
     } catch (error) {
       console.error("Failed to interrupt:", error);
     }
@@ -236,8 +277,10 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
     ? Math.round(progress.overall_percent * 100)
     : 0;
 
-  const totalQueued = waitingGens + liveGens;
-  const hasQueue = totalQueued > 0;
+  // Combine backend queue info with local tracking
+  const totalQueued = Math.max(waitingGens + liveGens, localQueueCount + (isGenerating ? 1 : 0));
+  const hasQueue = totalQueued > 0 || isGenerating;
+  const displayQueueCount = Math.max(waitingGens, localQueueCount);
   const queueFull = waitingGens > 10;
 
   return (
@@ -256,9 +299,9 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
             <>
               <Plus className="mr-2 h-4 w-4" />
               Add to Queue
-              {waitingGens > 0 && (
+              {displayQueueCount > 0 && (
                 <span className="ml-2 bg-primary/20 text-primary px-1.5 py-0.5 rounded text-xs">
-                  +{waitingGens}
+                  +{displayQueueCount}
                 </span>
               )}
             </>
@@ -320,7 +363,8 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
         <div className="flex items-center justify-between text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
           <span className="flex items-center gap-1.5">
             <ListOrdered className="h-3 w-3" />
-            Queue: {liveGens} generating{waitingGens > 0 && `, ${waitingGens} waiting`}
+            {isGenerating ? "1 generating" : `${liveGens} generating`}
+            {displayQueueCount > 0 && `, ${displayQueueCount} queued`}
           </span>
           {queueFull && (
             <span className="text-destructive">Queue full</span>

@@ -50,23 +50,30 @@ export function useFabricCanvas(
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const isLoadingRef = useRef(false);
-  const isInitializedRef = useRef(false);
+  const canvasInstanceRef = useRef<Canvas | null>(null);
 
   // Initialize canvas
   useEffect(() => {
-    if (!canvasRef.current || canvas || isInitializedRef.current) return;
+    if (!canvasRef.current) return;
+
+    // If we already have a canvas instance in the ref, reuse it
+    if (canvasInstanceRef.current) {
+      if (!canvas) {
+        setCanvas(canvasInstanceRef.current);
+        setIsReady(true);
+      }
+      return;
+    }
 
     const canvasElement = canvasRef.current;
 
     // Ensure the canvas element is in the DOM
     if (!canvasElement.parentElement) {
-      console.log("[ImageEditor] Canvas not yet in DOM, waiting...");
       return;
     }
 
-    // Check if canvas already has Fabric attached (data-fabric attribute)
-    if (canvasElement.getAttribute('data-fabric')) {
-      console.log("[ImageEditor] Canvas already initialized by Fabric");
+    // Check if already initialized by Fabric (has wrapper)
+    if (canvasElement.parentElement?.querySelector('.canvas-container')) {
       return;
     }
 
@@ -74,21 +81,20 @@ export function useFabricCanvas(
     const width = canvasElement.width || 512;
     const height = canvasElement.height || 512;
 
-    console.log("[ImageEditor] Initializing Fabric canvas:", width, "x", height);
-
-    // Mark as initializing to prevent double initialization
-    isInitializedRef.current = true;
-
     // Wait for next frame to ensure DOM is fully rendered
-    let fabricCanvas: Canvas | null = null;
     let cancelled = false;
 
-    const rafId1 = requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
       if (cancelled) return;
-      const rafId2 = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
         if (cancelled) return;
+
+        // Double-check we haven't initialized yet
+        if (canvasInstanceRef.current) return;
+        if (canvasElement.parentElement?.querySelector('.canvas-container')) return;
+
         try {
-          fabricCanvas = new Canvas(canvasElement, {
+          const fabricCanvas = new Canvas(canvasElement, {
             isDrawingMode: true,
             backgroundColor: "transparent",
             selection: true,
@@ -96,7 +102,8 @@ export function useFabricCanvas(
             height,
           });
 
-          console.log("[ImageEditor] Fabric canvas created");
+          // Store in ref immediately
+          canvasInstanceRef.current = fabricCanvas;
 
           // Set up brush
           const brush = new PencilBrush(fabricCanvas);
@@ -110,17 +117,21 @@ export function useFabricCanvas(
           setCanvas(fabricCanvas);
           setIsReady(true);
         } catch (err) {
-          console.error("[ImageEditor] Failed to initialize canvas:", err);
-          isInitializedRef.current = false;
+          // Ignore "already initialized" errors in development
+          if (!(err instanceof Error) || !err.message.includes('already been initialized')) {
+            console.error("[ImageEditor] Failed to initialize canvas:", err);
+          }
         }
       });
     });
 
     return () => {
       cancelled = true;
-      if (fabricCanvas) {
-        fabricCanvas.dispose();
-        isInitializedRef.current = false;
+      // Only dispose on actual unmount, not StrictMode re-run
+      // We check if the canvas element is still in the DOM
+      if (canvasInstanceRef.current && !document.body.contains(canvasElement)) {
+        canvasInstanceRef.current.dispose();
+        canvasInstanceRef.current = null;
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -274,7 +285,6 @@ export function useFabricCanvas(
 
   const loadImage = useCallback(async (url: string) => {
     if (!canvas) {
-      console.log("[ImageEditor] No canvas");
       return;
     }
 

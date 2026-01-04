@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSessionStore } from "@/stores/session";
 import { useParametersStore } from "@/stores/parameters";
 import { useLoraStore } from "@/stores/loras";
+import { useGenerationStore } from "@/stores/generation";
 import { listImages, toggleImageStarred, deleteImage } from "@/lib/api";
 import { extractConfigFromMetadata } from "@/lib/metadata";
 import { Button } from "@/components/ui/button";
@@ -96,6 +97,7 @@ const orientationConfig: Record<"landscape" | "portrait" | "square", string> = {
 export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) {
   const router = useRouter();
   const { sessionId } = useSessionStore();
+  const { starredImages, setImageStarred } = useGenerationStore();
 
   // Data state
   const [allImages, setAllImages] = useState<OutputImage[]>([]);
@@ -121,8 +123,7 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
   const [fullViewOpen, setFullViewOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  // Star and delete state
-  const [starredImages, setStarredImages] = useState<Record<string, boolean>>({});
+  // Delete state
   const [deleteTarget, setDeleteTarget] = useState<OutputImage | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -371,9 +372,15 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
 
   // Check if image is starred
   const isImageStarred = (image: OutputImage): boolean => {
+    // Check both path formats for compatibility between history and generate pages
     if (image.fullPath in starredImages) {
       return starredImages[image.fullPath];
     }
+    const withPrefix = `/Output/${image.fullPath}`;
+    if (withPrefix in starredImages) {
+      return starredImages[withPrefix];
+    }
+    // Fall back to metadata
     const extraData = (image.metadata?.sui_extra_data || image.metadata?.Sui_extra_data || {}) as Record<string, unknown>;
     return !!(image.metadata?.starred || extraData.starred);
   };
@@ -384,7 +391,10 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
 
     try {
       const result = await toggleImageStarred(image.fullPath, sessionId);
-      setStarredImages(prev => ({ ...prev, [image.fullPath]: result.new_state }));
+      // Use normalized path (without /Output/ prefix) for consistency with generate page
+      setImageStarred(image.fullPath, result.new_state);
+      // Also set with /Output/ prefix for generate page compatibility
+      setImageStarred(`/Output/${image.fullPath}`, result.new_state);
     } catch (error) {
       console.error("Failed to toggle star:", error);
     }

@@ -128,7 +128,9 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
     const imagePath = image.image.replace(/^\/Output\//, "");
     try {
       const result = await toggleImageStarred(imagePath, sessionId);
+      // Set both path formats for compatibility between generate and history pages
       setImageStarred(image.image, result.new_state);
+      setImageStarred(imagePath, result.new_state);
     } catch (error) {
       console.error("Failed to toggle star:", error);
     }

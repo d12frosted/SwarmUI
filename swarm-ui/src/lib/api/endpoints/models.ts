@@ -76,5 +76,5 @@ export async function getModelHash(
   modelName: string,
   sessionId: string
 ): Promise<{ hash: string }> {
-  return apiRequest<{ hash: string }>("GetModelHash", { model: modelName }, { sessionId });
+  return apiRequest<{ hash: string }>("GetModelHash", { modelName }, { sessionId });
 }

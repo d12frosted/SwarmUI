@@ -161,12 +161,17 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
       // Remove from batch
       removeFromBatch(currentIndex);
 
-      // Navigate to previous or next image
-      if (currentIndex > 0) {
+      // Navigate: stay at same index to show next image (indices shift down after removal)
+      // If we deleted the last image in the list, go to previous
+      // If it was the only image, close the full view dialog
+      if (batch.length === 1) {
+        // Was the only image, close full view
+        setFullViewOpen(false);
+      } else if (currentIndex >= batch.length - 1) {
+        // Was the last image, go to previous
         onIndexChange?.(currentIndex - 1);
-      } else if (batch.length > 1) {
-        onIndexChange?.(0);
       }
+      // Otherwise stay at same index - next image slides into this position
     } finally {
       setIsDeleting(false);
       setDeleteDialogOpen(false);

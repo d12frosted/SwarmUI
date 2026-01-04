@@ -5,12 +5,13 @@ import { usePathname } from "next/navigation";
 import { useStatusStore } from "@/stores/status";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Sparkles, Sliders, FolderOpen, Settings } from "lucide-react";
+import { Sparkles, Sliders, FolderOpen, Settings, Server } from "lucide-react";
 
 const navItems = [
   { href: "/generate", label: "Generate", icon: Sparkles },
   { href: "/presets", label: "Presets", icon: Sliders },
   { href: "/history", label: "History", icon: FolderOpen },
+  { href: "/server", label: "Server", icon: Server },
   { href: "/user", label: "Settings", icon: Settings },
 ];
 

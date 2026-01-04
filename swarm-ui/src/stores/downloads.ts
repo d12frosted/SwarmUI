@@ -11,6 +11,8 @@ export interface DownloadItem {
   status: "pending" | "downloading" | "complete" | "error";
   progress: number;
   speed: number;
+  currentBytes: number;
+  totalBytes: number;
   error?: string;
   metadata?: CivitaiMetadata;
   startedAt: number;
@@ -37,7 +39,7 @@ interface DownloadsState {
   activeClients: Map<string, WSClient>;
 
   // Actions
-  addDownload: (download: Omit<DownloadItem, "id" | "status" | "progress" | "speed" | "startedAt">) => string;
+  addDownload: (download: Omit<DownloadItem, "id" | "status" | "progress" | "speed" | "currentBytes" | "totalBytes" | "startedAt">) => string;
   updateDownload: (id: string, update: Partial<DownloadItem>) => void;
   removeDownload: (id: string) => void;
   clearCompleted: () => void;
@@ -57,6 +59,8 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => ({
       status: "pending",
       progress: 0,
       speed: 0,
+      currentBytes: 0,
+      totalBytes: 0,
       startedAt: Date.now(),
     };
     set((state) => ({
@@ -106,10 +110,12 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => ({
         const msg = data as Record<string, unknown>;
 
         // Update progress
-        if (msg.current_percent !== undefined || msg.overall_percent !== undefined) {
-          const progress = ((msg.overall_percent as number) || (msg.current_percent as number) || 0) * 100;
+        if (msg.current_percent !== undefined) {
+          const progress = ((msg.current_percent as number) || 0) * 100;
           const speed = (msg.per_second as number) || 0;
-          updateDownload(id, { progress, speed });
+          const currentBytes = (msg.current_bytes as number) || 0;
+          const totalBytes = (msg.total_bytes as number) || 0;
+          updateDownload(id, { progress, speed, currentBytes, totalBytes });
         }
 
         // Check for completion
@@ -180,6 +186,14 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => ({
 }));
 
 // Utility functions
+export function formatBytes(bytes: number): string {
+  if (bytes <= 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
 export function formatSpeed(bytesPerSecond: number): string {
   if (bytesPerSecond <= 0) return "—";
   if (bytesPerSecond < 1024) return `${bytesPerSecond.toFixed(0)} B/s`;
@@ -212,4 +226,15 @@ export function estimateTimeRemaining(progress: number, startedAt: number): stri
   const remaining = estimatedTotal - elapsed;
   if (remaining <= 0) return "—";
   return formatDuration(remaining);
+}
+
+export function estimateTimeRemainingFromBytes(
+  currentBytes: number,
+  totalBytes: number,
+  speed: number
+): string {
+  if (totalBytes <= 0 || currentBytes >= totalBytes || speed <= 0) return "—";
+  const remainingBytes = totalBytes - currentBytes;
+  const remainingMs = (remainingBytes / speed) * 1000;
+  return formatDuration(remainingMs);
 }

@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import DOMPurify from "dompurify";
 import { useSessionStore } from "@/stores/session";
-import { useDownloadsStore, formatSpeed, formatElapsed, estimateTimeRemaining, type CivitaiMetadata } from "@/stores/downloads";
+import { useDownloadsStore, formatSpeed, formatBytes, formatElapsed, estimateTimeRemainingFromBytes, type CivitaiMetadata } from "@/stores/downloads";
 import { listModels, deleteModel, triggerRefresh } from "@/lib/api";
 import { parseCivitaiUrl, parseHuggingFaceUrl, fetchCivitaiMetadata, fetchImageAsBase64 } from "@/lib/api/endpoints/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -423,10 +423,13 @@ export function ModelManager() {
                       </div>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>{formatSpeed(download.speed)}</span>
-                        <span className="flex items-center gap-2">
-                          <span>{formatElapsed(download.startedAt)} elapsed</span>
-                          <span>~{estimateTimeRemaining(download.progress, download.startedAt)} left</span>
-                        </span>
+                        {download.totalBytes > 0 && (
+                          <span>{formatBytes(download.currentBytes)} / {formatBytes(download.totalBytes)}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{formatElapsed(download.startedAt)} elapsed</span>
+                        <span>~{estimateTimeRemainingFromBytes(download.currentBytes, download.totalBytes, download.speed)} left</span>
                       </div>
                     </>
                   )}

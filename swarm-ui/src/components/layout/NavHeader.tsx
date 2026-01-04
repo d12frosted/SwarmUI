@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useStatusStore } from "@/stores/status";
-import { useDownloadsStore, formatSpeed, formatElapsed, estimateTimeRemaining } from "@/stores/downloads";
+import { useDownloadsStore, formatSpeed, formatBytes, formatElapsed, estimateTimeRemainingFromBytes } from "@/stores/downloads";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -154,7 +154,11 @@ export function NavHeader() {
                               </div>
                               <div className="flex items-center justify-between text-xs text-muted-foreground">
                                 <span>{formatSpeed(download.speed)}</span>
-                                <span>~{estimateTimeRemaining(download.progress, download.startedAt)} left</span>
+                                {download.totalBytes > 0 ? (
+                                  <span>{formatBytes(download.currentBytes)} / {formatBytes(download.totalBytes)}</span>
+                                ) : (
+                                  <span>~{estimateTimeRemainingFromBytes(download.currentBytes, download.totalBytes, download.speed)} left</span>
+                                )}
                               </div>
                             </>
                           )}

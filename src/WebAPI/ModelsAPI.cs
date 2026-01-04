@@ -626,8 +626,9 @@ public static class ModelsAPI
             {
                 ws.SendJson(new JObject()
                 {
-                    ["current_percent"] = progress / (double)total,
-                    ["overall_percent"] = 0.2,
+                    ["current_percent"] = total > 0 ? progress / (double)total : 0,
+                    ["current_bytes"] = progress,
+                    ["total_bytes"] = total,
                     ["per_second"] = perSec
                 }, API.WebsocketTimeout).Wait();
             }, canceller, originalUrl, headers: headers);

@@ -96,16 +96,18 @@ export const useLoraStore = create<LoraState>()(
         // Don't add if already selected
         if (selectedLoras.some((l) => l.name === name)) return;
 
-        // Get default weight from model or preferences
-        const defaultWeight =
-          lora.lora_default_weight !== undefined
-            ? parseFloat(String(lora.lora_default_weight))
-            : weightPrefs[name] ?? 1;
+        // Get default weight from model or preferences (ensure valid number)
+        let defaultWeight = weightPrefs[name] ?? 1;
+        if (lora.lora_default_weight !== undefined) {
+          const parsed = parseFloat(String(lora.lora_default_weight));
+          if (!Number.isNaN(parsed)) defaultWeight = parsed;
+        }
 
-        const defaultConfinement =
-          lora.lora_default_confinement !== undefined
-            ? parseInt(String(lora.lora_default_confinement))
-            : confinementPrefs[name] ?? 0;
+        let defaultConfinement = confinementPrefs[name] ?? 0;
+        if (lora.lora_default_confinement !== undefined) {
+          const parsed = parseInt(String(lora.lora_default_confinement));
+          if (!Number.isNaN(parsed)) defaultConfinement = parsed;
+        }
 
         const newLora: SelectedLora = {
           name,
@@ -186,9 +188,14 @@ export const useLoraStore = create<LoraState>()(
         const { setValue } = useParametersStore.getState();
 
         // Build comma-separated strings for the parameters
+        // Ensure valid values (default weight=1, confinement=0)
         const loraNames = selectedLoras.map((l) => l.name);
-        const loraWeights = selectedLoras.map((l) => l.weight);
-        const loraConfinements = selectedLoras.map((l) => l.confinement);
+        const loraWeights = selectedLoras.map((l) =>
+          Number.isNaN(l.weight) || l.weight === undefined ? 1 : l.weight
+        );
+        const loraConfinements = selectedLoras.map((l) =>
+          Number.isNaN(l.confinement) || l.confinement === undefined ? 0 : l.confinement
+        );
 
         // Only include confinement if any non-zero values
         const hasConfinement = loraConfinements.some((c) => c !== 0);

@@ -25,12 +25,16 @@ export default function GeneratePage() {
   const promptTokens = useTokenCount(String(values.prompt || ""));
   const negativePromptTokens = useTokenCount(String(values.negativeprompt || ""));
 
-  const handleImageGenerated = (image: GeneratedImage) => {
-    // Auto-select the latest image
+  const handleImageGenerated = () => {
+    // Auto-select the latest image (undefined = latest)
     setSelectedBatchIndex(undefined);
   };
 
-  const handleBatchImageSelect = (image: GeneratedImage, index: number) => {
+  const handleBatchImageSelect = (_image: GeneratedImage, index: number) => {
+    setSelectedBatchIndex(index);
+  };
+
+  const handleIndexChange = (index: number) => {
     setSelectedBatchIndex(index);
   };
 
@@ -178,7 +182,11 @@ export default function GeneratePage() {
                 <span className="text-sm font-medium">Result</span>
               </div>
               <CardContent className="flex-1 p-3 min-h-0 overflow-hidden">
-                <ImageResult className="h-full" />
+                <ImageResult
+                  className="h-full"
+                  selectedIndex={selectedBatchIndex}
+                  onIndexChange={handleIndexChange}
+                />
               </CardContent>
             </Card>
           </div>

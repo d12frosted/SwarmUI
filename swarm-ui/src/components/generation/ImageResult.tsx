@@ -1,38 +1,75 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useGenerationStore } from "@/stores/generation";
+import { useSessionStore } from "@/stores/session";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ImageViewerDialog } from "@/components/shared";
+import { ImageViewerDialog, ImageDetailsPanel } from "@/components/shared";
+import { deleteImage } from "@/lib/api";
 import {
-  Download,
   ZoomIn,
-  Copy,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { GeneratedImage } from "@/types/api";
 
 interface ImageResultProps {
   className?: string;
+  selectedIndex?: number;
+  onIndexChange?: (index: number) => void;
 }
 
-export function ImageResult({ className }: ImageResultProps) {
-  const { currentRequest, batch } = useGenerationStore();
-  const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
+export function ImageResult({ className, selectedIndex, onIndexChange }: ImageResultProps) {
+  const { currentRequest, batch, removeFromBatch } = useGenerationStore();
+  const { sessionId } = useSessionStore();
   const [fullViewOpen, setFullViewOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const previewImage = currentRequest?.previewImage;
   const isGenerating = currentRequest?.status === "generating";
   const progress = currentRequest?.progress;
 
-  // Get the most recent image or preview
-  const displayImage = batch.length > 0 ? batch[batch.length - 1] : null;
+  // Determine which image to display
+  const currentIndex = selectedIndex ?? (batch.length > 0 ? batch.length - 1 : -1);
+  const displayImage = currentIndex >= 0 && currentIndex < batch.length ? batch[currentIndex] : null;
 
-  const handleOpenFullView = (image: GeneratedImage) => {
-    setSelectedImage(image);
-    setFullViewOpen(true);
-  };
+  // Navigation
+  const canGoPrev = currentIndex > 0;
+  const canGoNext = currentIndex < batch.length - 1;
+
+  const handleNavigate = useCallback((delta: number) => {
+    const newIndex = currentIndex + delta;
+    if (newIndex >= 0 && newIndex < batch.length) {
+      onIndexChange?.(newIndex);
+    }
+  }, [currentIndex, batch.length, onIndexChange]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (fullViewOpen) return; // Let dialog handle its own keys
+      if (e.key === "ArrowLeft" && canGoPrev) {
+        handleNavigate(-1);
+      } else if (e.key === "ArrowRight" && canGoNext) {
+        handleNavigate(1);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [fullViewOpen, canGoPrev, canGoNext, handleNavigate]);
 
   const handleDownload = async (image: GeneratedImage) => {
     try {
@@ -57,113 +94,183 @@ export function ImageResult({ className }: ImageResultProps) {
     }
   };
 
+  const handleDelete = async () => {
+    if (!displayImage || !sessionId) return;
+
+    setIsDeleting(true);
+    try {
+      // Try to delete from disk if it's a saved file (not a data URL)
+      if (!displayImage.image.startsWith("data:")) {
+        const imagePath = displayImage.image.replace(/^\/Output\//, "");
+        try {
+          await deleteImage(imagePath, sessionId);
+        } catch (e) {
+          console.warn("Could not delete from disk:", e);
+        }
+      }
+
+      // Remove from batch
+      removeFromBatch(currentIndex);
+
+      // Navigate to previous or next image
+      if (currentIndex > 0) {
+        onIndexChange?.(currentIndex - 1);
+      } else if (batch.length > 1) {
+        onIndexChange?.(0);
+      }
+    } finally {
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
+    }
+  };
+
   return (
     <div className={`flex flex-col h-full ${className}`}>
-      {/* Main Image Display */}
-      <div className="flex-1 relative rounded-lg overflow-hidden flex items-start justify-center">
-        {isGenerating && previewImage ? (
-          // Show preview during generation - scale up to fill container
-          <div className="relative w-full max-h-full">
-            <img
-              src={previewImage}
-              alt="Generation preview"
-              className="w-full max-h-full object-contain rounded-lg"
-            />
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="text-center text-white bg-black/50 px-4 py-2 rounded-lg">
-                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-1" />
-                <p className="text-sm font-medium">
-                  {progress
-                    ? `${Math.round(progress.overall_percent * 100)}%`
-                    : "Generating..."}
-                </p>
+      {/* Main content - split into image and metadata */}
+      <div className="flex-1 flex flex-col lg:flex-row gap-3 min-h-0 overflow-hidden">
+        {/* Image section - constrained size */}
+        <div className="flex-1 lg:flex-[2] flex flex-col min-h-0 min-w-0">
+          <div className="flex-1 relative rounded-lg overflow-hidden flex items-start justify-center bg-muted/30 min-h-0">
+            {isGenerating && previewImage ? (
+              // Show preview during generation
+              <div className="relative max-w-full max-h-full">
+                <img
+                  src={previewImage}
+                  alt="Generation preview"
+                  className="max-w-full max-h-full object-contain rounded-lg"
+                />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="text-center text-white bg-black/50 px-4 py-2 rounded-lg">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto mb-1" />
+                    <p className="text-sm font-medium">
+                      {progress
+                        ? `${Math.round(progress.overall_percent * 100)}%`
+                        : "Generating..."}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        ) : displayImage ? (
-          // Show generated image
-          <div className="relative w-full max-h-full group">
-            <img
-              src={displayImage.image}
-              alt="Generated image"
-              className="w-full max-h-full object-contain cursor-pointer rounded-lg"
-              onClick={() => handleOpenFullView(displayImage)}
-            />
-            {/* Overlay actions */}
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
-              <div className="flex gap-2 bg-black/40 p-2 rounded-lg">
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  onClick={() => handleOpenFullView(displayImage)}
-                  title="Full view"
-                >
-                  <ZoomIn className="h-4 w-4" />
-                </Button>
-                {/* TODO: Add AI-powered image editor with inpainting support */}
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  onClick={() => handleDownload(displayImage)}
-                  title="Download"
-                >
-                  <Download className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  onClick={() => handleCopyPrompt(displayImage)}
-                  title="Copy prompt"
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
+            ) : displayImage ? (
+              // Show generated image
+              <div className="relative max-w-full max-h-full group">
+                <img
+                  src={displayImage.image}
+                  alt="Generated image"
+                  className="max-w-full max-h-full object-contain cursor-pointer rounded-lg"
+                  onClick={() => setFullViewOpen(true)}
+                />
+
+                {/* Navigation arrows */}
+                {canGoPrev && (
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => { e.stopPropagation(); handleNavigate(-1); }}
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </Button>
+                )}
+                {canGoNext && (
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => { e.stopPropagation(); handleNavigate(1); }}
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </Button>
+                )}
+
+                {/* Overlay actions */}
+                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={(e) => { e.stopPropagation(); setFullViewOpen(true); }}
+                    title="Full view"
+                  >
+                    <ZoomIn className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={(e) => { e.stopPropagation(); setDeleteDialogOpen(true); }}
+                    title="Delete"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Image counter */}
+                {batch.length > 1 && (
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/50 px-3 py-1 rounded-full text-white text-xs">
+                    {currentIndex + 1} / {batch.length}
+                  </div>
+                )}
               </div>
-            </div>
+            ) : (
+              // Empty state
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <p>Generated images will appear here</p>
+              </div>
+            )}
           </div>
-        ) : (
-          // Empty state
-          <div className="flex items-center justify-center h-full text-muted-foreground">
-            <p>Generated images will appear here</p>
+        </div>
+
+        {/* Metadata panel - side by side on large screens */}
+        {displayImage && (
+          <div className="lg:flex-1 lg:max-w-xs border rounded-lg overflow-hidden flex flex-col min-h-0">
+            <ImageDetailsPanel
+              metadata={displayImage.metadata}
+              onDownload={() => handleDownload(displayImage)}
+              onCopyPrompt={() => handleCopyPrompt(displayImage)}
+              showActions={true}
+              className="flex-1 flex flex-col min-h-0 overflow-hidden"
+            />
           </div>
         )}
       </div>
 
-      {/* Metadata Display */}
-      {displayImage?.metadata && (
-        <div className="mt-2 p-2 bg-muted/50 rounded text-xs space-y-1">
-          {displayImage.metadata.prompt && (
-            <p className="line-clamp-2">
-              <span className="font-medium">Prompt:</span> {String(displayImage.metadata.prompt)}
-            </p>
-          )}
-          <div className="flex flex-wrap gap-2">
-            {displayImage.metadata.model && (
-              <Badge variant="outline">{String(displayImage.metadata.model)}</Badge>
-            )}
-            {displayImage.metadata.seed !== undefined && (
-              <Badge variant="secondary">Seed: {String(displayImage.metadata.seed)}</Badge>
-            )}
-            {displayImage.metadata.steps !== undefined && (
-              <Badge variant="secondary">Steps: {String(displayImage.metadata.steps)}</Badge>
-            )}
-            {displayImage.metadata.cfgscale !== undefined && (
-              <Badge variant="secondary">CFG: {String(displayImage.metadata.cfgscale)}</Badge>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Full View Dialog */}
-      {selectedImage && (
+      {displayImage && (
         <ImageViewerDialog
           open={fullViewOpen}
           onOpenChange={setFullViewOpen}
-          imageSrc={selectedImage.image}
-          metadata={selectedImage.metadata}
-          onDownload={() => handleDownload(selectedImage)}
-          onCopyPrompt={() => handleCopyPrompt(selectedImage)}
+          imageSrc={displayImage.image}
+          metadata={displayImage.metadata}
+          onDownload={() => handleDownload(displayImage)}
+          onCopyPrompt={() => handleCopyPrompt(displayImage)}
+          showNavigation={batch.length > 1}
+          currentIndex={currentIndex}
+          totalCount={batch.length}
+          onNavigate={handleNavigate}
         />
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Image</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the image from your session history and delete it from disk. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

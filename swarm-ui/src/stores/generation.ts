@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { GeneratedImage, GenerationProgress, ActiveGeneration } from "@/types/api";
+import type { GeneratedImage, GenerationProgress, ActiveGeneration, ImageMetadata } from "@/types/api";
 import { getActiveGenerations, listImages } from "@/lib/api";
 
 export interface GenerationRequest {
@@ -70,6 +70,19 @@ interface GenerationState {
 
 function generateId(): string {
   return `gen-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// Parse metadata from string or object (API may return stringified JSON)
+function parseMetadata(meta?: string | ImageMetadata): ImageMetadata | undefined {
+  if (!meta) return undefined;
+  if (typeof meta === "string") {
+    try {
+      return JSON.parse(meta);
+    } catch {
+      return undefined;
+    }
+  }
+  return meta;
 }
 
 export const useGenerationStore = create<GenerationState>((set, get) => ({
@@ -347,9 +360,10 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
             for (const file of imagesResponse.files) {
               // Create GeneratedImage from the file
               // file.src is relative path like "2025-01-04/image.png", need to prefix with /Output/
+              const metadata = parseMetadata(file.metadata as string | ImageMetadata | undefined);
               const image: GeneratedImage = {
                 image: `/Output/${file.src}`,
-                metadata: file.metadata || { prompt: "", model: "", seed: 0, steps: 0, cfgscale: 0, width: 0, height: 0 },
+                metadata: metadata || { prompt: "", model: "", seed: 0, steps: 0, cfgscale: 0, width: 0, height: 0 },
                 batch_id: `reconnect-${generationStartTime}`,
               };
               newImages.push(image);
@@ -411,8 +425,11 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
 
       // Filter to images created after session start time
       const filteredFiles = imagesResponse.files.filter(file => {
+        // Parse metadata first (API may return stringified JSON)
+        const meta = parseMetadata(file.metadata as string | ImageMetadata | undefined);
+
         // First check if metadata has generation_time (set by our UI)
-        const genTime = file.metadata?.generation_time as number | undefined;
+        const genTime = meta?.generation_time as number | undefined;
         if (genTime && genTime >= sessionStartTime) {
           return true;
         }
@@ -436,7 +453,8 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
       const recentFiles = filteredFiles.slice(-20);
       const newImages: GeneratedImage[] = [];
       for (const file of recentFiles) {
-        const metadata = file.metadata;
+        // Parse metadata (API may return stringified JSON)
+        const metadata = parseMetadata(file.metadata as string | ImageMetadata | undefined);
 
         const image: GeneratedImage = {
           image: `/Output/${file.src}`,

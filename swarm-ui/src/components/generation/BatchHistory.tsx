@@ -2,9 +2,20 @@
 
 import { useMemo, useState } from "react";
 import { useGenerationStore } from "@/stores/generation";
-import { Button } from "@/components/ui/button";
-import { Trash2, X } from "lucide-react";
+import { useSessionStore } from "@/stores/session";
+import { deleteImage } from "@/lib/api";
+import { Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { GeneratedImage } from "@/types/api";
 
 type ThumbnailSize = "S" | "M" | "L" | "XL";
@@ -22,11 +33,37 @@ interface BatchHistoryProps {
 }
 
 export function BatchHistory({ onImageSelect, selectedIndex }: BatchHistoryProps) {
-  const { batch, clearBatch, removeFromBatch } = useGenerationStore();
+  const { batch, removeFromBatch } = useGenerationStore();
+  const { sessionId } = useSessionStore();
   const [size, setSize] = useState<ThumbnailSize>("L");
+  const [deleteTarget, setDeleteTarget] = useState<{ image: GeneratedImage; index: number } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Reverse batch so newest is first
   const reversedBatch = useMemo(() => [...batch].reverse(), [batch]);
+
+  const handleDelete = async () => {
+    if (!deleteTarget || !sessionId) return;
+
+    setIsDeleting(true);
+    try {
+      // Try to delete from disk if it's a saved file (not a data URL)
+      if (!deleteTarget.image.image.startsWith("data:")) {
+        const imagePath = deleteTarget.image.image.replace(/^\/Output\//, "");
+        try {
+          await deleteImage(imagePath, sessionId);
+        } catch (e) {
+          console.warn("Could not delete from disk:", e);
+        }
+      }
+
+      // Remove from batch
+      removeFromBatch(deleteTarget.index);
+    } finally {
+      setIsDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
 
   if (batch.length === 0) {
     return (
@@ -38,40 +75,28 @@ export function BatchHistory({ onImageSelect, selectedIndex }: BatchHistoryProps
 
   return (
     <div className="h-full flex flex-col min-h-0 overflow-hidden">
-      {/* Header with count, size selector, and clear */}
+      {/* Header with count and size selector */}
       <div className="flex items-center justify-between mb-2 shrink-0 gap-2">
         <span className="text-xs text-muted-foreground">
           {batch.length} image{batch.length !== 1 ? "s" : ""}
         </span>
 
-        <div className="flex items-center gap-1">
-          {/* Size selector - styled like history page */}
-          <div className="flex items-center gap-0.5">
-            {(Object.keys(SIZE_CONFIG) as ThumbnailSize[]).map((s) => (
-              <button
-                key={s}
-                className={cn(
-                  "px-1.5 py-0.5 text-xs font-medium rounded transition-colors",
-                  size === s
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                )}
-                onClick={() => setSize(s)}
-              >
-                {SIZE_CONFIG[s].label}
-              </button>
-            ))}
-          </div>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={clearBatch}
-            className="h-6 text-xs px-2"
-          >
-            <Trash2 className="h-3 w-3 mr-1" />
-            Clear
-          </Button>
+        {/* Size selector */}
+        <div className="flex items-center gap-0.5">
+          {(Object.keys(SIZE_CONFIG) as ThumbnailSize[]).map((s) => (
+            <button
+              key={s}
+              className={cn(
+                "px-1.5 py-0.5 text-xs font-medium rounded transition-colors",
+                size === s
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+              )}
+              onClick={() => setSize(s)}
+            >
+              {SIZE_CONFIG[s].label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -102,15 +127,16 @@ export function BatchHistory({ onImageSelect, selectedIndex }: BatchHistoryProps
                 alt={`Generated image ${originalIndex + 1}`}
                 className="w-full h-auto object-contain"
               />
-              {/* Remove button */}
+              {/* Delete button */}
               <button
-                className="absolute top-1 right-1 p-1 bg-black/50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute top-1 right-1 p-1 bg-black/50 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive"
                 onClick={(e) => {
                   e.stopPropagation();
-                  removeFromBatch(originalIndex);
+                  setDeleteTarget({ image, index: originalIndex });
                 }}
+                title="Delete image"
               >
-                <X className="h-3 w-3 text-white" />
+                <Trash2 className="h-3 w-3 text-white" />
               </button>
               {/* Index badge */}
               <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/50 rounded text-[10px] text-white">
@@ -120,6 +146,28 @@ export function BatchHistory({ onImageSelect, selectedIndex }: BatchHistoryProps
           );
         })}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Image</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the image from your session history and delete it from disk. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
 import { useSessionStore } from "@/stores/session";
 import { useStatusStore } from "@/stores/status";
@@ -41,8 +42,15 @@ function SessionInitializer({ children }: { children: React.ReactNode }) {
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <SessionInitializer>{children}</SessionInitializer>
-      <Toaster position="bottom-right" />
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="dark"
+        enableSystem
+        disableTransitionOnChange
+      >
+        <SessionInitializer>{children}</SessionInitializer>
+        <Toaster position="bottom-right" />
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

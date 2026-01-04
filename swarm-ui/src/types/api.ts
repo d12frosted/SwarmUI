@@ -69,6 +69,22 @@ export interface RAMInfo {
   free: number;
 }
 
+// Active Generation (for reconnection)
+export interface ActiveGeneration {
+  request_id: number;
+  batch_index: number;
+  overall_percent: number;
+  current_percent: number;
+  model: string;
+  start_time: number;
+  waiting_gens: number;
+  live_gens: number;
+}
+
+export interface ActiveGenerationsResponse {
+  generations: ActiveGeneration[];
+}
+
 // Models
 export interface ModelData {
   name: string;
@@ -158,9 +174,11 @@ export interface GenerationInput {
 
 export interface GenerationProgress {
   batch_index: number;
+  request_id: string;
   overall_percent: number;
   current_percent: number;
   preview?: string;
+  metadata?: string;
 }
 
 export interface GeneratedImage {
@@ -185,6 +203,7 @@ export interface ImageMetadata {
 export interface WSImageResult {
   image: string;
   batch_index: string;
+  request_id: string;
   metadata: string;
 }
 

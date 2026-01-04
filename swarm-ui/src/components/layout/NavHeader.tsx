@@ -21,7 +21,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { Sparkles, Sliders, FolderOpen, Settings, Server, Wrench, Download, CheckCircle2, XCircle, Image, Loader2, X, Repeat, Clock } from "lucide-react";
+import { Sparkles, Sliders, FolderOpen, Settings, Server, Wrench, Download, CheckCircle2, XCircle, Image, Loader2, X, Repeat, Clock, RefreshCw } from "lucide-react";
+import { useSessionStore } from "@/stores/session";
+import { interruptAll } from "@/lib/api";
 
 const navItems = [
   { href: "/generate", label: "Generate", icon: Sparkles },
@@ -34,17 +36,42 @@ const navItems = [
 
 export function NavHeader() {
   const pathname = usePathname();
+  const { sessionId } = useSessionStore();
   const { waitingGens, liveGens, loadingModels } = useStatusStore();
   const { downloads } = useDownloadsStore();
   const {
     currentRequest,
     isGenerating,
     isGeneratingForever,
+    isReconnected,
+    reconnectedGeneration,
     queuedCount,
     batch,
     cancelGeneration,
-    resetQueue
+    resetQueue,
+    checkActiveGenerations,
+    startPolling,
+    stopPolling
   } = useGenerationStore();
+
+  // Check for active generations on mount
+  useEffect(() => {
+    if (sessionId && !isGenerating) {
+      checkActiveGenerations(sessionId);
+    }
+  }, [sessionId, checkActiveGenerations, isGenerating]);
+
+  // Start polling when reconnected
+  useEffect(() => {
+    if (isReconnected && sessionId) {
+      startPolling(sessionId, 2000);
+    }
+    return () => {
+      if (isReconnected) {
+        stopPolling();
+      }
+    };
+  }, [isReconnected, sessionId, startPolling, stopPolling]);
 
   const activeDownloads = downloads.filter(
     (d) => d.status === "downloading" || d.status === "pending"
@@ -131,13 +158,32 @@ export function NavHeader() {
               <PopoverContent className="w-80 p-2" align="end">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between px-2 py-1">
-                    <p className="text-sm font-medium">Generation</p>
+                    <p className="text-sm font-medium">
+                      Generation
+                      {isReconnected && (
+                        <Badge variant="outline" className="text-xs ml-2">
+                          <RefreshCw className="h-2.5 w-2.5 mr-0.5" />
+                          Reconnected
+                        </Badge>
+                      )}
+                    </p>
                     {isGenerating && (
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-6 px-2 text-xs"
-                        onClick={() => { cancelGeneration(); resetQueue(); }}
+                        onClick={async () => {
+                          if (sessionId) {
+                            try {
+                              await interruptAll(sessionId);
+                            } catch (e) {
+                              console.error("Failed to interrupt:", e);
+                            }
+                          }
+                          cancelGeneration();
+                          resetQueue();
+                          stopPolling();
+                        }}
                       >
                         <X className="h-3 w-3 mr-1" />
                         Cancel
@@ -145,8 +191,54 @@ export function NavHeader() {
                     )}
                   </div>
 
-                  {/* Current Generation */}
-                  {currentRequest && (
+                  {/* Reconnected Generation (polling mode) */}
+                  {isReconnected && reconnectedGeneration && (
+                    <div className="p-2 rounded-md bg-muted/50 space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium flex items-center gap-1.5">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Generating...
+                        </span>
+                        {reconnectedGeneration.waiting_gens > 0 && (
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {reconnectedGeneration.waiting_gens} queued
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Progress */}
+                      <div className="flex items-center gap-2">
+                        <Progress
+                          value={reconnectedGeneration.current_percent * 100}
+                          className="h-1.5 flex-1"
+                        />
+                        <span className="text-xs text-muted-foreground w-12 text-right">
+                          {Math.round(reconnectedGeneration.current_percent * 100)}%
+                        </span>
+                      </div>
+                      {reconnectedGeneration.batch_index > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Image {reconnectedGeneration.batch_index + 1} • Overall {Math.round(reconnectedGeneration.overall_percent * 100)}%
+                        </p>
+                      )}
+
+                      {/* Model info */}
+                      {reconnectedGeneration.model && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          Model: {reconnectedGeneration.model}
+                        </p>
+                      )}
+
+                      {/* Elapsed time */}
+                      <p className="text-xs text-muted-foreground text-center">
+                        {formatElapsed(reconnectedGeneration.start_time)} elapsed
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Current Generation (WebSocket mode) */}
+                  {currentRequest && !isReconnected && (
                     <div className="p-2 rounded-md bg-muted/50 space-y-2">
                       <div className="flex items-center justify-between text-sm">
                         <span className="font-medium flex items-center gap-1.5">

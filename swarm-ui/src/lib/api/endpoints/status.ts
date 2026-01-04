@@ -3,7 +3,7 @@
  */
 
 import { apiRequest } from "../client";
-import type { ServerStatus, ServerResourceInfo } from "@/types/api";
+import type { ServerStatus, ServerResourceInfo, ActiveGenerationsResponse } from "@/types/api";
 
 export async function getCurrentStatus(sessionId: string): Promise<ServerStatus> {
   return apiRequest<ServerStatus>("GetCurrentStatus", {}, { sessionId });
@@ -28,4 +28,8 @@ export async function getGlobalStatus(sessionId: string): Promise<GlobalStatus> 
 
 export async function interruptAll(sessionId: string): Promise<void> {
   await apiRequest("InterruptAll", {}, { sessionId });
+}
+
+export async function getActiveGenerations(sessionId: string): Promise<ActiveGenerationsResponse> {
+  return apiRequest<ActiveGenerationsResponse>("GetActiveGenerations", {}, { sessionId });
 }

@@ -312,6 +312,14 @@ namespace SwarmUI.Text2Image
                         }
                         else
                         {
+                            // Update claim progress for reconnection tracking
+                            if (obj is JObject progressObj)
+                            {
+                                int batchIdx = progressObj.Value<int>("batch_index");
+                                float overall = progressObj.Value<float>("overall_percent");
+                                float current = progressObj.Value<float>("current_percent");
+                                claim.UpdateProgress(batchIdx, overall, current);
+                            }
                             output(new JObject() { ["gen_progress"] = (JToken)obj });
                         }
                     });

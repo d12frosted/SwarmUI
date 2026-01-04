@@ -1,7 +1,8 @@
 "use client";
 
 import { create } from "zustand";
-import type { GeneratedImage, GenerationProgress, ImageMetadata } from "@/types/api";
+import type { GeneratedImage, GenerationProgress, ActiveGeneration } from "@/types/api";
+import { getActiveGenerations } from "@/lib/api";
 
 export interface GenerationRequest {
   id: string;
@@ -15,10 +16,17 @@ export interface GenerationRequest {
   endTime: number | null;
 }
 
+// Polling state (outside store to avoid re-renders)
+let pollIntervalId: NodeJS.Timeout | null = null;
+
 interface GenerationState {
   // Current generation
   currentRequest: GenerationRequest | null;
   isGenerating: boolean;
+
+  // Reconnection state
+  isReconnected: boolean;
+  reconnectedGeneration: ActiveGeneration | null;
 
   // Queue tracking (local count for accurate display)
   queuedCount: number;
@@ -50,6 +58,11 @@ interface GenerationState {
   incrementQueue: () => void;
   decrementQueue: () => void;
   resetQueue: () => void;
+
+  // Reconnection actions
+  checkActiveGenerations: (sessionId: string) => Promise<void>;
+  startPolling: (sessionId: string, interval?: number) => void;
+  stopPolling: () => void;
 }
 
 function generateId(): string {
@@ -60,6 +73,8 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
   // Initial state
   currentRequest: null,
   isGenerating: false,
+  isReconnected: false,
+  reconnectedGeneration: null,
   queuedCount: 0,
   batch: [],
   batchId: null,
@@ -248,5 +263,82 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
 
   resetQueue: () => {
     set({ queuedCount: 0 });
+  },
+
+  checkActiveGenerations: async (sessionId: string) => {
+    try {
+      const response = await getActiveGenerations(sessionId);
+      const activeGen = response.generations.find(g => g.live_gens > 0 || g.waiting_gens > 0);
+
+      if (activeGen) {
+        // Found active generation - we're in reconnected mode
+        set({
+          isGenerating: true,
+          isReconnected: true,
+          reconnectedGeneration: activeGen,
+          queuedCount: Math.max(0, activeGen.waiting_gens - 1), // -1 because one is live
+        });
+      } else {
+        // No active generations
+        set({
+          isReconnected: false,
+          reconnectedGeneration: null,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to check active generations:", error);
+    }
+  },
+
+  startPolling: (sessionId: string, interval: number = 2000) => {
+    const { stopPolling, checkActiveGenerations } = get();
+
+    // Stop any existing polling
+    stopPolling();
+
+    // Start new polling
+    pollIntervalId = setInterval(async () => {
+      const { isReconnected, reconnectedGeneration } = get();
+
+      if (!isReconnected) {
+        // Not in reconnected mode, stop polling
+        stopPolling();
+        return;
+      }
+
+      try {
+        const response = await getActiveGenerations(sessionId);
+        const activeGen = response.generations.find(g => g.live_gens > 0 || g.waiting_gens > 0);
+
+        if (activeGen) {
+          // Update progress
+          set({
+            reconnectedGeneration: activeGen,
+            queuedCount: Math.max(0, activeGen.waiting_gens),
+          });
+        } else {
+          // Generation complete
+          set({
+            isGenerating: false,
+            isReconnected: false,
+            reconnectedGeneration: null,
+            queuedCount: 0,
+          });
+          stopPolling();
+        }
+      } catch (error) {
+        console.error("Polling failed:", error);
+      }
+    }, interval);
+
+    // Run immediately once
+    checkActiveGenerations(sessionId);
+  },
+
+  stopPolling: () => {
+    if (pollIntervalId) {
+      clearInterval(pollIntervalId);
+      pollIntervalId = null;
+    }
   },
 }));

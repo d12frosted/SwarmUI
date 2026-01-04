@@ -98,6 +98,32 @@ public class Session : IEquatable<Session>
         /// <summary>The number of generations tracked by this object.</summary>
         public int WaitingGenerations = 0, LoadingModels = 0, WaitingBackends = 0, LiveGens = 0;
 
+        /// <summary>The user request ID for this generation (for reconnection tracking).</summary>
+        public long UserRequestId = 0;
+
+        /// <summary>Overall progress (0-1) across all images in the batch.</summary>
+        public float OverallPercent = 0;
+
+        /// <summary>Current image progress (0-1).</summary>
+        public float CurrentPercent = 0;
+
+        /// <summary>Current batch index being generated.</summary>
+        public int BatchIndex = 0;
+
+        /// <summary>The model name being used for generation.</summary>
+        public string ModelName = "";
+
+        /// <summary>When this generation started (Unix milliseconds).</summary>
+        public long StartTimeUnix = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        /// <summary>Updates the progress tracking fields.</summary>
+        public void UpdateProgress(int batchIndex, float overallPercent, float currentPercent)
+        {
+            BatchIndex = batchIndex;
+            OverallPercent = overallPercent;
+            CurrentPercent = currentPercent;
+        }
+
         /// <summary>The relevant original session.</summary>
         public Session Sess;
 

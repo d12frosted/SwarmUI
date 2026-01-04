@@ -426,6 +426,44 @@ public static class BasicAPIFeatures
         return new JObject() { ["success"] = true };
     }
 
+    [API.APIDescription("Gets the list of active generations in this session, with their progress. Useful for reconnecting after a page refresh.",
+        """
+            "generations": [
+                {
+                    "request_id": 12345,
+                    "batch_index": 0,
+                    "overall_percent": 0.5,
+                    "current_percent": 0.75,
+                    "model": "model_name",
+                    "start_time": 1704067200000,
+                    "waiting_gens": 1,
+                    "live_gens": 1
+                }
+            ]
+        """)]
+    public static async Task<JObject> GetActiveGenerations(Session session)
+    {
+        JArray generations = [];
+        foreach (var claim in session.Claims.Values)
+        {
+            if (claim.LiveGens > 0 || claim.WaitingGenerations > 0)
+            {
+                generations.Add(new JObject()
+                {
+                    ["request_id"] = claim.UserRequestId,
+                    ["batch_index"] = claim.BatchIndex,
+                    ["overall_percent"] = claim.OverallPercent,
+                    ["current_percent"] = claim.CurrentPercent,
+                    ["model"] = claim.ModelName,
+                    ["start_time"] = claim.StartTimeUnix,
+                    ["waiting_gens"] = claim.WaitingGenerations,
+                    ["live_gens"] = claim.LiveGens
+                });
+            }
+        }
+        return new JObject() { ["generations"] = generations };
+    }
+
     [API.APIDescription("Gets the user's current settings.",
         """
             "themes": {

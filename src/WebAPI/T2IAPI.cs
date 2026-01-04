@@ -289,6 +289,9 @@ public static class T2IAPI
         user_input.ApplySpecialLogic();
         images = user_input.Get(T2IParamTypes.Images, 1);
         claim.Extend(images - claim.WaitingGenerations);
+        // Track generation info for reconnection support
+        claim.UserRequestId = user_input.UserRequestId;
+        claim.ModelName = user_input.Get(T2IParamTypes.Model)?.Name ?? "";
         Logs.Info($"User {session.User.UserID} requested {images} image{(images == 1 ? "" : "s")} with model '{user_input.Get(T2IParamTypes.Model)?.Name}'...");
         if (Logs.MinimumLevel <= Logs.LogLevel.Verbose)
         {

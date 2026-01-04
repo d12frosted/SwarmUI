@@ -34,6 +34,7 @@ public static class BasicAPIFeatures
         API.RegisterAPICall(DeletePreset, true, Permissions.ManagePresets);
         API.RegisterAPICall(GetCurrentStatus, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(InterruptAll, true, Permissions.BasicImageGeneration);
+        API.RegisterAPICall(GetActiveGenerations, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(GetUserSettings, false, Permissions.ReadUserSettings);
         API.RegisterAPICall(ChangeUserSettings, true, Permissions.EditUserSettings);
         API.RegisterAPICall(ChangePassword, true, Permissions.EditUserSettings);

@@ -417,6 +417,11 @@ export function ModelManager() {
                             </p>
                           )}
                         </div>
+                        {model.architecture && (
+                          <Badge variant="outline" className="shrink-0">
+                            {model.architecture}
+                          </Badge>
+                        )}
                         {model.loaded && (
                           <Badge variant="secondary" className="shrink-0">
                             Loaded

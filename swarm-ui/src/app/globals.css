@@ -123,3 +123,15 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Fabric.js canvas styling */
+.fabric-canvas-container .canvas-container {
+  position: relative !important;
+}
+
+.fabric-canvas-container .upper-canvas,
+.fabric-canvas-container .lower-canvas {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+}

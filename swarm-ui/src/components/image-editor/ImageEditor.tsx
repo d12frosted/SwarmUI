@@ -88,23 +88,8 @@ export function ImageEditor({
     }
   }, [isReady, imageUrl, loadImage]);
 
-  // Resize canvas when container size changes
-  useEffect(() => {
-    if (!canvas || !containerRef.current) return;
-
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width: w, height: h } = entry.contentRect;
-        if (w > 0 && h > 0) {
-          canvas.setDimensions({ width: w, height: h });
-          canvas.renderAll();
-        }
-      }
-    });
-
-    resizeObserver.observe(containerRef.current);
-    return () => resizeObserver.disconnect();
-  }, [canvas]);
+  // Note: Dynamic resize disabled due to Fabric.js v6 initialization issues
+  // Canvas uses fixed dimensions from props (width/height)
 
   const handleExportMask = () => {
     const mask = exportMask();
@@ -272,26 +257,23 @@ export function ImageEditor({
       {/* Canvas container */}
       <div
         ref={containerRef}
-        className="relative border rounded-lg overflow-hidden bg-[#1a1a1a]"
+        className="relative border rounded-lg overflow-hidden fabric-canvas-container"
         style={{
-          minWidth: width,
-          minHeight: height,
+          width: width,
+          height: height,
           // Checkerboard pattern for transparency
-          backgroundImage: `
-            linear-gradient(45deg, #2a2a2a 25%, transparent 25%),
-            linear-gradient(-45deg, #2a2a2a 25%, transparent 25%),
-            linear-gradient(45deg, transparent 75%, #2a2a2a 75%),
-            linear-gradient(-45deg, transparent 75%, #2a2a2a 75%)
+          background: `
+            #1a1a1a
+            repeating-conic-gradient(#2a2a2a 0% 25%, transparent 0% 50%)
+            50% / 20px 20px
           `,
-          backgroundSize: "20px 20px",
-          backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0px",
         }}
       >
         <canvas
           ref={canvasRef}
           width={width}
           height={height}
-          className="absolute inset-0"
+          style={{ display: 'block' }}
         />
       </div>
 

@@ -50,31 +50,78 @@ export function useFabricCanvas(
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const isLoadingRef = useRef(false);
+  const isInitializedRef = useRef(false);
 
   // Initialize canvas
   useEffect(() => {
-    if (!canvasRef.current || canvas) return;
+    if (!canvasRef.current || canvas || isInitializedRef.current) return;
 
-    const fabricCanvas = new Canvas(canvasRef.current, {
-      isDrawingMode: true,
-      backgroundColor: "transparent",
-      selection: true,
+    const canvasElement = canvasRef.current;
+
+    // Ensure the canvas element is in the DOM
+    if (!canvasElement.parentElement) {
+      console.log("[ImageEditor] Canvas not yet in DOM, waiting...");
+      return;
+    }
+
+    // Check if canvas already has Fabric attached (data-fabric attribute)
+    if (canvasElement.getAttribute('data-fabric')) {
+      console.log("[ImageEditor] Canvas already initialized by Fabric");
+      return;
+    }
+
+    // Get dimensions from the canvas element
+    const width = canvasElement.width || 512;
+    const height = canvasElement.height || 512;
+
+    console.log("[ImageEditor] Initializing Fabric canvas:", width, "x", height);
+
+    // Mark as initializing to prevent double initialization
+    isInitializedRef.current = true;
+
+    // Wait for next frame to ensure DOM is fully rendered
+    let fabricCanvas: Canvas | null = null;
+    let cancelled = false;
+
+    const rafId1 = requestAnimationFrame(() => {
+      if (cancelled) return;
+      const rafId2 = requestAnimationFrame(() => {
+        if (cancelled) return;
+        try {
+          fabricCanvas = new Canvas(canvasElement, {
+            isDrawingMode: true,
+            backgroundColor: "transparent",
+            selection: true,
+            width,
+            height,
+          });
+
+          console.log("[ImageEditor] Fabric canvas created");
+
+          // Set up brush
+          const brush = new PencilBrush(fabricCanvas);
+          brush.width = brushSize;
+          brush.color = brushColor;
+          fabricCanvas.freeDrawingBrush = brush;
+
+          // Save initial state
+          historyRef.current.past = [JSON.stringify(fabricCanvas.toJSON())];
+
+          setCanvas(fabricCanvas);
+          setIsReady(true);
+        } catch (err) {
+          console.error("[ImageEditor] Failed to initialize canvas:", err);
+          isInitializedRef.current = false;
+        }
+      });
     });
 
-    // Set up brush
-    const brush = new PencilBrush(fabricCanvas);
-    brush.width = brushSize;
-    brush.color = brushColor;
-    fabricCanvas.freeDrawingBrush = brush;
-
-    // Save initial state
-    historyRef.current.past = [JSON.stringify(fabricCanvas.toJSON())];
-
-    setCanvas(fabricCanvas);
-    setIsReady(true);
-
     return () => {
-      fabricCanvas.dispose();
+      cancelled = true;
+      if (fabricCanvas) {
+        fabricCanvas.dispose();
+        isInitializedRef.current = false;
+      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasRef.current]);
@@ -226,38 +273,55 @@ export function useFabricCanvas(
   }, [canvas]);
 
   const loadImage = useCallback(async (url: string) => {
-    if (!canvas) return;
+    if (!canvas) {
+      console.log("[ImageEditor] No canvas");
+      return;
+    }
 
     isLoadingRef.current = true;
 
-    try {
-      // Load image using fabric's built-in method
-      const { FabricImage } = await import("fabric");
-      const img = await FabricImage.fromURL(url, { crossOrigin: "anonymous" });
+    // Small delay to ensure canvas is fully mounted
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Clear canvas
-      canvas.clear();
+    try {
+      const { FabricImage } = await import("fabric");
+
+      // Clear canvas - remove all objects first
+      const objects = canvas.getObjects();
+      objects.forEach(obj => canvas.remove(obj));
 
       // Scale image to fit canvas while maintaining aspect ratio
       const canvasWidth = canvas.getWidth();
       const canvasHeight = canvas.getHeight();
+
+      // Use Fabric's fromURL with correct v6 signature
+      const img = await FabricImage.fromURL(
+        url,
+        { crossOrigin: "anonymous" }
+      );
+
       const imgWidth = img.width || canvasWidth;
       const imgHeight = img.height || canvasHeight;
 
       const scale = Math.min(canvasWidth / imgWidth, canvasHeight / imgHeight);
-      img.scale(scale);
 
       // Center the image
+      const left = (canvasWidth - imgWidth * scale) / 2;
+      const top = (canvasHeight - imgHeight * scale) / 2;
+
       img.set({
-        left: (canvasWidth - imgWidth * scale) / 2,
-        top: (canvasHeight - imgHeight * scale) / 2,
-        selectable: false,
-        evented: false,
+        left,
+        top,
+        scaleX: scale,
+        scaleY: scale,
+        originX: 'left',
+        originY: 'top',
       });
 
+      // Add as regular object (will be sent to back)
       canvas.add(img);
       canvas.sendObjectToBack(img);
-      canvas.renderAll();
+      canvas.requestRenderAll();
 
       // Reset history
       historyRef.current = {
@@ -266,6 +330,8 @@ export function useFabricCanvas(
       };
       setCanUndo(false);
       setCanRedo(false);
+    } catch (e) {
+      console.error("[ImageEditor] Failed to load image:", e);
     } finally {
       isLoadingRef.current = false;
     }

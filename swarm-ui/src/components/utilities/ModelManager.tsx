@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import DOMPurify from "dompurify";
 import { useSessionStore } from "@/stores/session";
 import { listModels, deleteModel, triggerRefresh } from "@/lib/api";
 import { WSClient } from "@/lib/websocket/client";
@@ -426,9 +427,15 @@ export function ModelManager() {
                     <AccordionContent className="pb-4">
                       <div className="space-y-3 pt-2">
                         {model.description && (
-                          <p className="text-sm text-muted-foreground">
-                            {model.description}
-                          </p>
+                          <div
+                            className="text-sm text-muted-foreground prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0"
+                            dangerouslySetInnerHTML={{
+                              __html: DOMPurify.sanitize(model.description, {
+                                ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'b', 'i', 'u', 'a', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'hr', 'code', 'pre'],
+                                ALLOWED_ATTR: ['href', 'target', 'rel'],
+                              }),
+                            }}
+                          />
                         )}
                         <div className="flex flex-wrap gap-2">
                           {model.architecture && (

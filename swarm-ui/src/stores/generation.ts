@@ -35,6 +35,9 @@ interface GenerationState {
   batch: GeneratedImage[];
   batchId: string | null;
 
+  // Starred images state (shared between components)
+  starredImages: Record<string, boolean>;
+
   // History of recent generations
   history: GenerationRequest[];
   maxHistorySize: number;
@@ -53,6 +56,7 @@ interface GenerationState {
   cancelGeneration: () => void;
   clearBatch: () => void;
   removeFromBatch: (index: number) => void;
+  setImageStarred: (imagePath: string, starred: boolean) => void;
   setGeneratingForever: (value: boolean) => void;
   setGeneratingPreviews: (value: boolean) => void;
   incrementQueue: () => void;
@@ -94,6 +98,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
   queuedCount: 0,
   batch: [],
   batchId: null,
+  starredImages: {},
   history: [],
   maxHistorySize: 50,
   isGeneratingForever: false,
@@ -258,6 +263,12 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
   removeFromBatch: (index: number) => {
     set((state) => ({
       batch: state.batch.filter((_, i) => i !== index),
+    }));
+  },
+
+  setImageStarred: (imagePath: string, starred: boolean) => {
+    set((state) => ({
+      starredImages: { ...state.starredImages, [imagePath]: starred },
     }));
   },
 

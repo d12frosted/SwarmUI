@@ -45,13 +45,12 @@ interface ImageResultProps {
 }
 
 export function ImageResult({ className, selectedIndex, onIndexChange }: ImageResultProps) {
-  const { currentRequest, batch, removeFromBatch } = useGenerationStore();
+  const { currentRequest, batch, removeFromBatch, starredImages, setImageStarred } = useGenerationStore();
   const { sessionId } = useSessionStore();
   const [fullViewOpen, setFullViewOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [previewRatio, setPreviewRatio] = useState<PreviewRatio>("S");
-  const [starredImages, setStarredImages] = useState<Record<string, boolean>>({});
 
   const previewImage = currentRequest?.previewImage;
   const isGenerating = currentRequest?.status === "generating";
@@ -129,7 +128,7 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
     const imagePath = image.image.replace(/^\/Output\//, "");
     try {
       const result = await toggleImageStarred(imagePath, sessionId);
-      setStarredImages(prev => ({ ...prev, [image.image]: result.new_state }));
+      setImageStarred(image.image, result.new_state);
     } catch (error) {
       console.error("Failed to toggle star:", error);
     }

@@ -33,12 +33,11 @@ interface BatchHistoryProps {
 }
 
 export function BatchHistory({ onImageSelect, selectedIndex }: BatchHistoryProps) {
-  const { batch, removeFromBatch } = useGenerationStore();
+  const { batch, removeFromBatch, starredImages, setImageStarred } = useGenerationStore();
   const { sessionId } = useSessionStore();
   const [size, setSize] = useState<ThumbnailSize>("S");
   const [deleteTarget, setDeleteTarget] = useState<{ image: GeneratedImage; index: number } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [starredImages, setStarredImages] = useState<Record<string, boolean>>({});
 
   // Reverse batch so newest is first
   const reversedBatch = useMemo(() => [...batch].reverse(), [batch]);
@@ -59,7 +58,7 @@ export function BatchHistory({ onImageSelect, selectedIndex }: BatchHistoryProps
     const imagePath = image.image.replace(/^\/Output\//, "");
     try {
       const result = await toggleImageStarred(imagePath, sessionId);
-      setStarredImages(prev => ({ ...prev, [image.image]: result.new_state }));
+      setImageStarred(image.image, result.new_state);
     } catch (error) {
       console.error("Failed to toggle star:", error);
     }

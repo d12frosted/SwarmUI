@@ -60,7 +60,7 @@ export async function deleteImage(
   imageSrc: string,
   sessionId: string
 ): Promise<void> {
-  await apiRequest("DeleteImage", { image: imageSrc }, { sessionId });
+  await apiRequest("DeleteImage", { path: imageSrc }, { sessionId });
 }
 
 export async function openImageFolder(

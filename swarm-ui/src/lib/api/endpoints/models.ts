@@ -67,9 +67,10 @@ export async function editModelMetadata(
 
 export async function deleteModel(
   modelName: string,
-  sessionId: string
+  sessionId: string,
+  subtype: string = "Stable-Diffusion"
 ): Promise<void> {
-  await apiRequest("DeleteModel", { model: modelName }, { sessionId });
+  await apiRequest("DeleteModel", { modelName, subtype }, { sessionId });
 }
 
 export async function getModelHash(

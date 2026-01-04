@@ -3,8 +3,9 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import DOMPurify from "dompurify";
 import { useSessionStore } from "@/stores/session";
+import { useDownloadsStore, formatSpeed, formatElapsed, estimateTimeRemaining, type CivitaiMetadata } from "@/stores/downloads";
 import { listModels, deleteModel, triggerRefresh } from "@/lib/api";
-import { WSClient } from "@/lib/websocket/client";
+import { parseCivitaiUrl, parseHuggingFaceUrl, fetchCivitaiMetadata, fetchImageAsBase64 } from "@/lib/api/endpoints/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Accordion,
   AccordionContent,
   AccordionItem,
@@ -41,10 +50,13 @@ import {
   Loader2,
   RefreshCw,
   Package,
-  HardDrive,
   CheckCircle2,
   XCircle,
+  Search,
+  X,
   ExternalLink,
+  User,
+  Tag,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ModelData } from "@/types/api";
@@ -57,23 +69,10 @@ const MODEL_TYPES = [
   { value: "ControlNet", label: "ControlNets" },
 ];
 
-interface DownloadProgress {
-  url: string;
-  name: string;
-  progress: number;
-  speed: string;
-  status: "downloading" | "complete" | "error";
-  error?: string;
-}
-
-function formatSpeed(bytesPerSecond: number): string {
-  if (bytesPerSecond < 1024) return `${bytesPerSecond.toFixed(0)} B/s`;
-  if (bytesPerSecond < 1024 * 1024) return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`;
-  return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`;
-}
-
 export function ModelManager() {
   const { sessionId } = useSessionStore();
+  const { downloads, addDownload, startDownload, cancelDownload, clearCompleted } = useDownloadsStore();
+
   const [modelType, setModelType] = useState("Stable-Diffusion");
   const [models, setModels] = useState<ModelData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -83,11 +82,30 @@ export function ModelManager() {
   const [downloadUrl, setDownloadUrl] = useState("");
   const [downloadName, setDownloadName] = useState("");
   const [downloadType, setDownloadType] = useState("Stable-Diffusion");
-  const [activeDownloads, setActiveDownloads] = useState<DownloadProgress[]>([]);
+  const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
+  const [previewMetadata, setPreviewMetadata] = useState<CivitaiMetadata | null>(null);
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+  const [pendingDownloadUrl, setPendingDownloadUrl] = useState("");
 
   // Delete state
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Filter active downloads for this component
+  const activeDownloads = downloads.filter(
+    (d) => d.status === "downloading" || d.status === "pending"
+  );
+  const completedDownloads = downloads.filter(
+    (d) => d.status === "complete" || d.status === "error"
+  );
+
+  // Force re-render every second while downloads are active to update elapsed time
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (activeDownloads.length === 0) return;
+    const interval = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, [activeDownloads.length]);
 
   const loadModels = useCallback(async () => {
     if (!sessionId) return;
@@ -108,6 +126,14 @@ export function ModelManager() {
     loadModels();
   }, [loadModels]);
 
+  // Refresh models when a download completes
+  useEffect(() => {
+    const hasCompleted = downloads.some((d) => d.status === "complete");
+    if (hasCompleted) {
+      loadModels();
+    }
+  }, [downloads, loadModels]);
+
   const handleRefresh = useCallback(async () => {
     if (!sessionId) return;
 
@@ -124,105 +150,128 @@ export function ModelManager() {
     }
   }, [sessionId, loadModels]);
 
-  const handleDownload = useCallback(async () => {
+  const handleUrlCheck = useCallback(async () => {
     if (!sessionId || !downloadUrl.trim()) return;
 
+    const url = downloadUrl.trim();
+
+    // Check for Civitai URL
+    const civitaiParsed = parseCivitaiUrl(url);
+    if (civitaiParsed) {
+      setIsFetchingMetadata(true);
+      try {
+        // For API download URLs, we only have versionId
+        const modelId = civitaiParsed.modelId || "";
+        const versionId = civitaiParsed.versionId;
+
+        if (modelId) {
+          const metadata = await fetchCivitaiMetadata(modelId, versionId, sessionId);
+          if (metadata) {
+            setPreviewMetadata(metadata);
+            setPendingDownloadUrl(url);
+            // Auto-detect type from metadata
+            if (metadata.modelType) {
+              setDownloadType(metadata.modelType);
+            }
+            // Suggest name from metadata
+            if (!downloadName.trim()) {
+              const suggestedName = metadata.title
+                .replace(/[<>:"/\\|?*]/g, "")
+                .replace(/\s+/g, "_")
+                .substring(0, 50);
+              setDownloadName(suggestedName);
+            }
+            setShowPreviewDialog(true);
+          } else {
+            // Metadata fetch failed, proceed with direct download
+            startDirectDownload(url);
+          }
+        } else if (versionId) {
+          // We only have versionId (from API download URL), proceed with direct download
+          startDirectDownload(url);
+        }
+      } catch (error) {
+        console.error("Failed to fetch Civitai metadata:", error);
+        startDirectDownload(url);
+      } finally {
+        setIsFetchingMetadata(false);
+      }
+      return;
+    }
+
+    // Check for HuggingFace URL
+    const hfParsed = parseHuggingFaceUrl(url);
+    if (hfParsed) {
+      // Use fixed URL and suggested filename
+      if (!downloadName.trim()) {
+        setDownloadName(hfParsed.filename);
+      }
+      startDirectDownload(hfParsed.fixedUrl);
+      return;
+    }
+
+    // Direct URL - proceed without preview
+    startDirectDownload(url);
+  }, [sessionId, downloadUrl, downloadName]);
+
+  const startDirectDownload = useCallback((url: string) => {
+    if (!sessionId) return;
+
     const name = downloadName.trim() || `model_${Date.now()}`;
-    const downloadId = `${Date.now()}`;
-
-    setActiveDownloads((prev) => [
-      ...prev,
-      {
-        url: downloadUrl,
-        name,
-        progress: 0,
-        speed: "0 B/s",
-        status: "downloading",
-      },
-    ]);
-
-    const client = new WSClient("DoModelDownloadWS", {
-      sessionId,
-      onMessage: (data) => {
-        const msg = data as Record<string, unknown>;
-
-        // Update progress
-        if (msg.current_percent !== undefined || msg.overall_percent !== undefined) {
-          const progress = ((msg.overall_percent as number) || (msg.current_percent as number) || 0) * 100;
-          const speed = formatSpeed((msg.per_second as number) || 0);
-
-          setActiveDownloads((prev) =>
-            prev.map((d) =>
-              d.url === downloadUrl ? { ...d, progress, speed } : d
-            )
-          );
-        }
-
-        // Check for completion
-        if (msg.success || msg.complete) {
-          setActiveDownloads((prev) =>
-            prev.map((d) =>
-              d.url === downloadUrl ? { ...d, status: "complete", progress: 100 } : d
-            )
-          );
-          toast.success(`Downloaded ${name}`);
-          loadModels();
-        }
-
-        // Check for error
-        if (msg.error) {
-          setActiveDownloads((prev) =>
-            prev.map((d) =>
-              d.url === downloadUrl
-                ? { ...d, status: "error", error: msg.error as string }
-                : d
-            )
-          );
-          toast.error(`Download failed: ${msg.error}`);
-        }
-      },
-      onError: (error) => {
-        setActiveDownloads((prev) =>
-          prev.map((d) =>
-            d.url === downloadUrl
-              ? { ...d, status: "error", error: error.message }
-              : d
-          )
-        );
-        toast.error(`Download failed: ${error.message}`);
-      },
-      onStateChange: (state) => {
-        if (state === "completed" || state === "disconnected") {
-          // Clean up completed downloads after a delay
-          setTimeout(() => {
-            setActiveDownloads((prev) =>
-              prev.filter((d) => d.url !== downloadUrl || d.status === "downloading")
-            );
-          }, 5000);
-        }
-      },
+    const id = addDownload({
+      url,
+      name,
+      type: downloadType,
     });
+    startDownload(id, sessionId);
+    setDownloadUrl("");
+    setDownloadName("");
+    toast.success(`Started downloading ${name}`);
+  }, [sessionId, downloadName, downloadType, addDownload, startDownload]);
+
+  const [isPreparingDownload, setIsPreparingDownload] = useState(false);
+
+  const handleConfirmPreviewDownload = useCallback(async () => {
+    if (!sessionId || !previewMetadata) return;
+
+    setIsPreparingDownload(true);
 
     try {
-      await client.connect({
-        url: downloadUrl,
-        type: downloadType,
+      // Fetch the preview image as base64 for embedding in model metadata
+      let metadataWithImage = { ...previewMetadata };
+      if (previewMetadata.previewImage) {
+        const base64Image = await fetchImageAsBase64(previewMetadata.previewImage);
+        if (base64Image) {
+          metadataWithImage.previewImageBase64 = base64Image;
+        }
+      }
+
+      const name = downloadName.trim() || previewMetadata.title.replace(/[<>:"/\\|?*]/g, "").replace(/\s+/g, "_").substring(0, 50);
+      const id = addDownload({
+        url: pendingDownloadUrl,
         name,
+        type: downloadType,
+        metadata: metadataWithImage,
       });
+      startDownload(id, sessionId);
+
+      setShowPreviewDialog(false);
+      setPreviewMetadata(null);
+      setPendingDownloadUrl("");
       setDownloadUrl("");
       setDownloadName("");
-    } catch (error) {
-      toast.error("Failed to start download");
-      setActiveDownloads((prev) => prev.filter((d) => d.url !== downloadUrl));
+      toast.success(`Started downloading ${previewMetadata.title}`);
+    } finally {
+      setIsPreparingDownload(false);
     }
-  }, [sessionId, downloadUrl, downloadName, downloadType, loadModels]);
+  }, [sessionId, previewMetadata, downloadName, downloadType, pendingDownloadUrl, addDownload, startDownload]);
 
   const handleDelete = useCallback(async () => {
     if (!sessionId || !deleteTarget) return;
 
     setIsDeleting(true);
     try {
-      await deleteModel(deleteTarget, sessionId);
+      await deleteModel(deleteTarget, sessionId, modelType);
       toast.success(`Deleted ${deleteTarget}`);
       setDeleteTarget(null);
       loadModels();
@@ -232,11 +281,7 @@ export function ModelManager() {
     } finally {
       setIsDeleting(false);
     }
-  }, [sessionId, deleteTarget, loadModels]);
-
-  const clearCompletedDownloads = () => {
-    setActiveDownloads((prev) => prev.filter((d) => d.status === "downloading"));
-  };
+  }, [sessionId, deleteTarget, modelType, loadModels]);
 
   return (
     <div className="space-y-4">
@@ -252,75 +297,103 @@ export function ModelManager() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2 sm:col-span-2">
+          <div className="space-y-3">
+            <div className="space-y-2">
               <Label>Model URL</Label>
-              <Input
-                placeholder="https://civitai.com/api/download/models/... or direct URL"
-                value={downloadUrl}
-                onChange={(e) => setDownloadUrl(e.target.value)}
-              />
+              <div className="flex gap-2">
+                <Input
+                  placeholder="https://civitai.com/models/... or direct download URL"
+                  value={downloadUrl}
+                  onChange={(e) => setDownloadUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && downloadUrl.trim()) {
+                      handleUrlCheck();
+                    }
+                  }}
+                  className="flex-1"
+                />
+                <Button
+                  onClick={handleUrlCheck}
+                  disabled={!downloadUrl.trim() || isFetchingMetadata}
+                >
+                  {isFetchingMetadata ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Paste a Civitai or HuggingFace URL - type and name are auto-detected
+              </p>
             </div>
-            <div className="space-y-2">
-              <Label>Save As (optional)</Label>
-              <Input
-                placeholder="model_name"
-                value={downloadName}
-                onChange={(e) => setDownloadName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Type</Label>
-              <Select value={downloadType} onValueChange={setDownloadType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MODEL_TYPES.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+
+            {/* Advanced options - collapsible */}
+            <details className="text-sm">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                Advanced options (for direct URLs)
+              </summary>
+              <div className="grid gap-3 sm:grid-cols-2 mt-3 pl-2 border-l-2 border-muted">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Save As</Label>
+                  <Input
+                    placeholder="model_name (auto-detected)"
+                    value={downloadName}
+                    onChange={(e) => setDownloadName(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Type</Label>
+                  <Select value={downloadType} onValueChange={setDownloadType}>
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MODEL_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </details>
           </div>
-          <Button
-            onClick={handleDownload}
-            disabled={!downloadUrl.trim() || activeDownloads.some((d) => d.status === "downloading")}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Download
-          </Button>
 
           {/* Active Downloads */}
-          {activeDownloads.length > 0 && (
+          {downloads.length > 0 && (
             <div className="space-y-2 mt-4">
               <div className="flex items-center justify-between">
-                <Label>Downloads</Label>
-                {activeDownloads.some((d) => d.status !== "downloading") && (
-                  <Button variant="ghost" size="sm" onClick={clearCompletedDownloads}>
+                <Label>Downloads ({activeDownloads.length} active)</Label>
+                {completedDownloads.length > 0 && (
+                  <Button variant="ghost" size="sm" onClick={clearCompleted}>
                     Clear completed
                   </Button>
                 )}
               </div>
-              {activeDownloads.map((download, idx) => (
+              {downloads.map((download) => (
                 <div
-                  key={idx}
+                  key={download.id}
                   className="p-3 bg-muted/50 rounded-lg space-y-2"
                 >
                   <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium truncate flex-1">
-                      {download.name}
-                    </span>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      {download.metadata?.previewImage && (
+                        <img
+                          src={download.metadata.previewImage}
+                          alt=""
+                          className="w-8 h-8 rounded object-cover shrink-0"
+                        />
+                      )}
+                      <span className="font-medium truncate">
+                        {download.metadata?.title || download.name}
+                      </span>
+                    </div>
                     <span className="flex items-center gap-2 shrink-0">
-                      {download.status === "downloading" && (
-                        <>
-                          <span className="text-muted-foreground">
-                            {download.speed}
-                          </span>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        </>
+                      {download.status === "pending" && (
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       )}
                       {download.status === "complete" && (
                         <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -328,10 +401,39 @@ export function ModelManager() {
                       {download.status === "error" && (
                         <XCircle className="h-4 w-4 text-red-500" />
                       )}
+                      {download.status === "downloading" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => cancelDownload(download.id)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
                     </span>
                   </div>
                   {download.status === "downloading" && (
-                    <Progress value={download.progress} className="h-2" />
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Progress value={download.progress} className="h-2 flex-1" />
+                        <span className="text-xs text-muted-foreground w-10 text-right">
+                          {download.progress.toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{formatSpeed(download.speed)}</span>
+                        <span className="flex items-center gap-2">
+                          <span>{formatElapsed(download.startedAt)} elapsed</span>
+                          <span>~{estimateTimeRemaining(download.progress, download.startedAt)} left</span>
+                        </span>
+                      </div>
+                    </>
+                  )}
+                  {download.status === "complete" && (
+                    <p className="text-xs text-muted-foreground">
+                      Completed in {formatElapsed(download.startedAt)}
+                    </p>
                   )}
                   {download.error && (
                     <p className="text-xs text-red-500">{download.error}</p>
@@ -482,6 +584,130 @@ export function ModelManager() {
           )}
         </CardContent>
       </Card>
+
+      {/* Civitai Preview Dialog */}
+      <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Download Model</DialogTitle>
+            <DialogDescription>
+              Review model details before downloading
+            </DialogDescription>
+          </DialogHeader>
+
+          {previewMetadata && (
+            <div className="space-y-4">
+              {/* Preview Image */}
+              {previewMetadata.previewImage && (
+                <div className="relative aspect-video rounded-lg overflow-hidden bg-muted">
+                  <img
+                    src={previewMetadata.previewImage}
+                    alt={previewMetadata.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+
+              {/* Model Info */}
+              <div className="space-y-2">
+                <h3 className="font-semibold text-lg">{previewMetadata.title}</h3>
+
+                <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+                  {previewMetadata.author && (
+                    <span className="flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      {previewMetadata.author}
+                    </span>
+                  )}
+                  {previewMetadata.baseModel && (
+                    <Badge variant="outline">{previewMetadata.baseModel}</Badge>
+                  )}
+                  {previewMetadata.modelType && (
+                    <Badge variant="secondary">{previewMetadata.modelType}</Badge>
+                  )}
+                </div>
+
+                {/* Trigger Words */}
+                {previewMetadata.triggerWords && previewMetadata.triggerWords.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Trigger Words:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {previewMetadata.triggerWords.map((word, idx) => (
+                        <code key={idx} className="px-1.5 py-0.5 bg-muted rounded text-xs">
+                          {word}
+                        </code>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tags */}
+                {previewMetadata.tags && previewMetadata.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {previewMetadata.tags.slice(0, 8).map((tag, idx) => (
+                      <Badge key={idx} variant="outline" className="text-xs">
+                        <Tag className="h-2.5 w-2.5 mr-1" />
+                        {tag}
+                      </Badge>
+                    ))}
+                    {previewMetadata.tags.length > 8 && (
+                      <Badge variant="outline" className="text-xs">
+                        +{previewMetadata.tags.length - 8} more
+                      </Badge>
+                    )}
+                  </div>
+                )}
+
+                {/* Save Name */}
+                <div className="space-y-1.5 pt-2">
+                  <Label>Save as</Label>
+                  <Input
+                    value={downloadName}
+                    onChange={(e) => setDownloadName(e.target.value)}
+                    placeholder={previewMetadata.title}
+                  />
+                </div>
+
+                {/* Type Selection */}
+                <div className="space-y-1.5">
+                  <Label>Type</Label>
+                  <Select value={downloadType} onValueChange={setDownloadType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MODEL_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPreviewDialog(false)} disabled={isPreparingDownload}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmPreviewDownload} disabled={isPreparingDownload}>
+              {isPreparingDownload ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Preparing...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>

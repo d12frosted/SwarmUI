@@ -16,7 +16,7 @@ import { useGenerationStore } from "@/stores/generation";
 import { useParametersStore } from "@/stores/parameters";
 import { WSClient } from "@/lib/websocket/client";
 import { interruptAll } from "@/lib/api";
-import { Play, Square, AlertCircle, Infinity } from "lucide-react";
+import { Play, Square, AlertCircle, Infinity, Plus, ListOrdered } from "lucide-react";
 import type { WSMessage, GeneratedImage, GenerationProgress, ImageMetadata } from "@/types/api";
 
 interface GenerateButtonProps {
@@ -236,29 +236,59 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
     ? Math.round(progress.overall_percent * 100)
     : 0;
 
+  const totalQueued = waitingGens + liveGens;
+  const hasQueue = totalQueued > 0;
+  const queueFull = waitingGens > 10;
+
   return (
     <div className="flex flex-col gap-2">
+      {/* Main buttons row */}
       <div className="flex items-center gap-2">
-        {isGenerating ? (
-          <Button
-            variant="destructive"
-            size="lg"
-            className="flex-1"
-            onClick={handleInterrupt}
-          >
-            <Square className="mr-2 h-4 w-4" />
-            {isGeneratingForever ? "Stop Forever" : "Interrupt"}
-          </Button>
-        ) : (
-          <Button
-            size="lg"
-            className="flex-1"
-            onClick={handleGenerate}
-            disabled={!sessionId || waitingGens > 10}
-          >
-            <Play className="mr-2 h-4 w-4" />
-            Generate
-          </Button>
+        {/* Generate / Add to Queue button - always visible */}
+        <Button
+          size="lg"
+          className="flex-1"
+          onClick={handleGenerate}
+          disabled={!sessionId || queueFull}
+          variant={isGenerating ? "secondary" : "default"}
+        >
+          {isGenerating ? (
+            <>
+              <Plus className="mr-2 h-4 w-4" />
+              Add to Queue
+              {waitingGens > 0 && (
+                <span className="ml-2 bg-primary/20 text-primary px-1.5 py-0.5 rounded text-xs">
+                  +{waitingGens}
+                </span>
+              )}
+            </>
+          ) : (
+            <>
+              <Play className="mr-2 h-4 w-4" />
+              Generate
+            </>
+          )}
+        </Button>
+
+        {/* Interrupt button - only when generating */}
+        {(isGenerating || hasQueue) && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="destructive"
+                  size="lg"
+                  onClick={handleInterrupt}
+                  className="shrink-0"
+                >
+                  <Square className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{isGeneratingForever ? "Stop Forever" : "Interrupt All"}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
 
         {/* Generate Forever Toggle */}
@@ -285,6 +315,19 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
         </TooltipProvider>
       </div>
 
+      {/* Queue status - always visible when there's activity */}
+      {hasQueue && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
+          <span className="flex items-center gap-1.5">
+            <ListOrdered className="h-3 w-3" />
+            Queue: {liveGens} generating{waitingGens > 0 && `, ${waitingGens} waiting`}
+          </span>
+          {queueFull && (
+            <span className="text-destructive">Queue full</span>
+          )}
+        </div>
+      )}
+
       {/* Progress indicator */}
       {isGenerating && (
         <div className="space-y-1">
@@ -306,13 +349,6 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
             />
           </div>
         </div>
-      )}
-
-      {/* Queue indicator */}
-      {(waitingGens > 0 || liveGens > 0) && !isGenerating && (
-        <p className="text-xs text-muted-foreground text-center">
-          Queue: {waitingGens} waiting, {liveGens} generating
-        </p>
       )}
 
       {/* Error display */}

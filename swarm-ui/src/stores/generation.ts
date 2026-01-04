@@ -18,18 +18,21 @@ export interface GenerationRequest {
 
 // Polling state (outside store to avoid re-renders)
 let pollIntervalId: NodeJS.Timeout | null = null;
+let syncTimeoutId: NodeJS.Timeout | null = null;
 
 interface GenerationState {
-  // Current generation
-  currentRequest: GenerationRequest | null;
+  // All active generation requests (tracked by ID)
+  activeRequests: Record<string, GenerationRequest>;
+
+  // Primary request ID (for progress display in UI)
+  primaryRequestId: string | null;
+
+  // Computed: true if any requests are active
   isGenerating: boolean;
 
   // Reconnection state
   isReconnected: boolean;
   reconnectedGeneration: ActiveGeneration | null;
-
-  // Queue tracking (local count for accurate display)
-  queuedCount: number;
 
   // Batch of generated images (current session)
   batch: GeneratedImage[];
@@ -53,18 +56,20 @@ interface GenerationState {
   addGeneratedImage: (requestId: string, image: GeneratedImage) => void;
   completeGeneration: (requestId: string) => void;
   failGeneration: (requestId: string, error: string) => void;
-  cancelGeneration: () => void;
+  cancelAllGenerations: () => void;
   clearBatch: () => void;
   removeFromBatch: (index: number) => void;
   setImageStarred: (imagePath: string, starred: boolean) => void;
   setGeneratingForever: (value: boolean) => void;
   setGeneratingPreviews: (value: boolean) => void;
-  incrementQueue: () => void;
-  decrementQueue: () => void;
-  resetQueue: () => void;
+
+  // Helpers
+  getActiveCount: () => number;
+  getPrimaryRequest: () => GenerationRequest | null;
 
   // Reconnection actions
   checkActiveGenerations: (sessionId: string, sessionStartTime?: number) => Promise<void>;
+  syncWithServer: (sessionId: string) => Promise<void>;
   startPolling: (sessionId: string, interval?: number) => void;
   stopPolling: () => void;
 
@@ -89,13 +94,18 @@ function parseMetadata(meta?: string | ImageMetadata): ImageMetadata | undefined
   return meta;
 }
 
+// Helper to compute isGenerating from activeRequests
+function computeIsGenerating(activeRequests: Record<string, GenerationRequest>): boolean {
+  return Object.values(activeRequests).some(r => r.status === "generating" || r.status === "pending");
+}
+
 export const useGenerationStore = create<GenerationState>((set, get) => ({
   // Initial state
-  currentRequest: null,
+  activeRequests: {},
+  primaryRequestId: null,
   isGenerating: false,
   isReconnected: false,
   reconnectedGeneration: null,
-  queuedCount: 0,
   batch: [],
   batchId: null,
   starredImages: {},
@@ -107,6 +117,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
   startGeneration: (params: Record<string, unknown>) => {
     const id = generateId();
     const batchId = get().batchId || generateId();
+    const { activeRequests, primaryRequestId } = get();
 
     const request: GenerationRequest = {
       id,
@@ -120,25 +131,29 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
       endTime: null,
     };
 
+    const newActiveRequests = { ...activeRequests, [id]: request };
+
     set({
-      currentRequest: request,
+      activeRequests: newActiveRequests,
+      // First request becomes primary
+      primaryRequestId: primaryRequestId || id,
       isGenerating: true,
       batchId,
     });
 
+    console.log(`[Generation] Started request ${id}, active count: ${Object.keys(newActiveRequests).length}`);
     return id;
   },
 
   updateProgress: (requestId: string, progress: GenerationProgress) => {
     set((state) => {
-      if (state.currentRequest?.id !== requestId) {
-        return state;
-      }
+      const request = state.activeRequests[requestId];
+      if (!request) return state;
 
       return {
-        currentRequest: {
-          ...state.currentRequest,
-          progress,
+        activeRequests: {
+          ...state.activeRequests,
+          [requestId]: { ...request, progress },
         },
       };
     });
@@ -146,14 +161,13 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
 
   setPreviewImage: (requestId: string, previewUrl: string) => {
     set((state) => {
-      if (state.currentRequest?.id !== requestId) {
-        return state;
-      }
+      const request = state.activeRequests[requestId];
+      if (!request) return state;
 
       return {
-        currentRequest: {
-          ...state.currentRequest,
-          previewImage: previewUrl,
+        activeRequests: {
+          ...state.activeRequests,
+          [requestId]: { ...request, previewImage: previewUrl },
         },
       };
     });
@@ -161,95 +175,130 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
 
   addGeneratedImage: (requestId: string, image: GeneratedImage) => {
     set((state) => {
-      if (state.currentRequest?.id !== requestId) {
-        return state;
+      const request = state.activeRequests[requestId];
+      if (!request) {
+        // Request not found - still add image to batch (might be from queue)
+        console.log(`[Generation] Adding image from unknown request ${requestId}`);
+        return {
+          batch: [...state.batch, image],
+        };
       }
 
-      const updatedRequest = {
-        ...state.currentRequest,
-        images: [...state.currentRequest.images, image],
-      };
-
       return {
-        currentRequest: updatedRequest,
+        activeRequests: {
+          ...state.activeRequests,
+          [requestId]: {
+            ...request,
+            images: [...request.images, image],
+          },
+        },
         batch: [...state.batch, image],
       };
     });
   },
 
   completeGeneration: (requestId: string) => {
-    set((state) => {
-      if (state.currentRequest?.id !== requestId) {
-        return state;
-      }
+    const { activeRequests, primaryRequestId, history, maxHistorySize } = get();
+    const request = activeRequests[requestId];
 
-      const completedRequest: GenerationRequest = {
-        ...state.currentRequest,
-        status: "completed",
-        endTime: Date.now(),
-      };
+    if (!request) {
+      console.log(`[Generation] Complete called for unknown request ${requestId}`);
+      return;
+    }
 
-      // Add to history
-      const newHistory = [completedRequest, ...state.history].slice(
-        0,
-        state.maxHistorySize
-      );
+    const completedRequest: GenerationRequest = {
+      ...request,
+      status: "completed",
+      endTime: Date.now(),
+    };
 
-      return {
-        currentRequest: null,
-        isGenerating: false,
-        history: newHistory,
-      };
+    // Remove from active, add to history
+    const { [requestId]: _, ...remainingRequests } = activeRequests;
+    const newHistory = [completedRequest, ...history].slice(0, maxHistorySize);
+
+    // If this was the primary request, pick a new one
+    let newPrimaryId = primaryRequestId === requestId ? null : primaryRequestId;
+    if (!newPrimaryId) {
+      const remainingIds = Object.keys(remainingRequests);
+      newPrimaryId = remainingIds.length > 0 ? remainingIds[0] : null;
+    }
+
+    const isStillGenerating = computeIsGenerating(remainingRequests);
+
+    console.log(`[Generation] Completed request ${requestId}, remaining: ${Object.keys(remainingRequests).length}, isGenerating: ${isStillGenerating}`);
+
+    set({
+      activeRequests: remainingRequests,
+      primaryRequestId: newPrimaryId,
+      isGenerating: isStillGenerating,
+      history: newHistory,
+      // Clear reconnected state if no more active requests
+      isReconnected: isStillGenerating ? get().isReconnected : false,
+      reconnectedGeneration: isStillGenerating ? get().reconnectedGeneration : null,
     });
   },
 
   failGeneration: (requestId: string, error: string) => {
-    set((state) => {
-      if (state.currentRequest?.id !== requestId) {
-        return state;
-      }
+    const { activeRequests, primaryRequestId, history, maxHistorySize } = get();
+    const request = activeRequests[requestId];
 
-      const failedRequest: GenerationRequest = {
-        ...state.currentRequest,
-        status: "error",
-        error,
-        endTime: Date.now(),
-      };
+    if (!request) {
+      console.log(`[Generation] Fail called for unknown request ${requestId}`);
+      return;
+    }
 
-      // Add to history even if failed
-      const newHistory = [failedRequest, ...state.history].slice(
-        0,
-        state.maxHistorySize
-      );
+    const failedRequest: GenerationRequest = {
+      ...request,
+      status: "error",
+      error,
+      endTime: Date.now(),
+    };
 
-      return {
-        currentRequest: null,
-        isGenerating: false,
-        history: newHistory,
-      };
+    // Remove from active, add to history
+    const { [requestId]: _, ...remainingRequests } = activeRequests;
+    const newHistory = [failedRequest, ...history].slice(0, maxHistorySize);
+
+    // If this was the primary request, pick a new one
+    let newPrimaryId = primaryRequestId === requestId ? null : primaryRequestId;
+    if (!newPrimaryId) {
+      const remainingIds = Object.keys(remainingRequests);
+      newPrimaryId = remainingIds.length > 0 ? remainingIds[0] : null;
+    }
+
+    const isStillGenerating = computeIsGenerating(remainingRequests);
+
+    console.log(`[Generation] Failed request ${requestId}: ${error}, remaining: ${Object.keys(remainingRequests).length}`);
+
+    set({
+      activeRequests: remainingRequests,
+      primaryRequestId: newPrimaryId,
+      isGenerating: isStillGenerating,
+      history: newHistory,
     });
   },
 
-  cancelGeneration: () => {
-    set((state) => {
-      if (!state.currentRequest) {
-        return state;
-      }
+  cancelAllGenerations: () => {
+    const { activeRequests, history, maxHistorySize } = get();
 
-      const cancelledRequest: GenerationRequest = {
-        ...state.currentRequest,
-        status: "error",
-        error: "Cancelled by user",
-        endTime: Date.now(),
-      };
+    // Mark all active requests as cancelled and move to history
+    const cancelledRequests = Object.values(activeRequests).map(request => ({
+      ...request,
+      status: "error" as const,
+      error: "Cancelled by user",
+      endTime: Date.now(),
+    }));
 
-      return {
-        currentRequest: null,
-        isGenerating: false,
-        isGeneratingForever: false,
-        isGeneratingPreviews: false,
-        history: [cancelledRequest, ...state.history].slice(0, state.maxHistorySize),
-      };
+    const newHistory = [...cancelledRequests, ...history].slice(0, maxHistorySize);
+
+    console.log(`[Generation] Cancelled ${cancelledRequests.length} active requests`);
+
+    set({
+      activeRequests: {},
+      primaryRequestId: null,
+      isGenerating: false,
+      isGeneratingForever: false,
+      isGeneratingPreviews: false,
+      history: newHistory,
     });
   },
 
@@ -280,16 +329,50 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     set({ isGeneratingPreviews: value });
   },
 
-  incrementQueue: () => {
-    set((state) => ({ queuedCount: state.queuedCount + 1 }));
+  getActiveCount: () => {
+    return Object.keys(get().activeRequests).length;
   },
 
-  decrementQueue: () => {
-    set((state) => ({ queuedCount: Math.max(0, state.queuedCount - 1) }));
+  getPrimaryRequest: () => {
+    const { activeRequests, primaryRequestId } = get();
+    return primaryRequestId ? activeRequests[primaryRequestId] || null : null;
   },
 
-  resetQueue: () => {
-    set({ queuedCount: 0 });
+  syncWithServer: async (sessionId: string) => {
+    try {
+      const response = await getActiveGenerations(sessionId);
+      const serverGen = response.generations.find(g => g.live_gens > 0 || g.waiting_gens > 0);
+      const { activeRequests, isReconnected } = get();
+      const localCount = Object.keys(activeRequests).length;
+
+      if (serverGen) {
+        const serverCount = serverGen.live_gens + serverGen.waiting_gens;
+
+        if (localCount === 0 && serverCount > 0) {
+          // Server has active generations but we don't - enter reconnected mode
+          console.log(`[Generation] Sync: Server has ${serverCount} active, we have ${localCount}. Entering reconnected mode.`);
+          set({
+            isGenerating: true,
+            isReconnected: true,
+            reconnectedGeneration: serverGen,
+          });
+          get().startPolling(sessionId);
+        } else if (localCount > 0 && !isReconnected) {
+          // We have local tracking, just log the sync
+          console.log(`[Generation] Sync: Server has ${serverCount}, we track ${localCount}`);
+        }
+      } else if (localCount === 0 && isReconnected) {
+        // Server shows complete, we were in reconnected mode
+        console.log("[Generation] Sync: Server shows no active generations, clearing reconnected state");
+        set({
+          isReconnected: false,
+          reconnectedGeneration: null,
+        });
+        get().stopPolling();
+      }
+    } catch (error) {
+      console.error("[Generation] Sync failed:", error);
+    }
   },
 
   checkActiveGenerations: async (sessionId: string, sessionStartTime?: number) => {
@@ -305,7 +388,6 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
           isGenerating: true,
           isReconnected: true,
           reconnectedGeneration: activeGen,
-          queuedCount: Math.max(0, activeGen.waiting_gens - activeGen.live_gens),
         });
       } else {
         // No active generations
@@ -326,14 +408,16 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
   },
 
   startPolling: (sessionId: string, interval: number = 2000) => {
-    const { stopPolling, checkActiveGenerations } = get();
+    const { stopPolling } = get();
 
     // Stop any existing polling
     stopPolling();
 
+    console.log("[Generation] Starting polling for reconnected generation");
+
     // Start new polling
     pollIntervalId = setInterval(async () => {
-      const { isReconnected, reconnectedGeneration } = get();
+      const { isReconnected } = get();
 
       if (!isReconnected) {
         // Not in reconnected mode, stop polling
@@ -349,11 +433,10 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
           // Update progress
           set({
             reconnectedGeneration: activeGen,
-            queuedCount: Math.max(0, activeGen.waiting_gens - activeGen.live_gens),
           });
         } else {
           // Generation complete - fetch recent images
-          const { reconnectedGeneration } = get();
+          const { reconnectedGeneration, batch } = get();
           const generationStartTime = reconnectedGeneration?.start_time || 0;
 
           try {
@@ -366,20 +449,23 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
               limit: 20,
             }, sessionId);
 
-            // Add recent images to batch
+            // Find images not already in batch
+            const existingPaths = new Set(batch.map(img => img.image));
             const newImages: GeneratedImage[] = [];
+
             for (const file of imagesResponse.files) {
-              // Create GeneratedImage from the file
-              // file.src is relative path like "2025-01-04/image.png", need to prefix with /Output/
+              const imagePath = `/Output/${file.src}`;
+              if (existingPaths.has(imagePath)) continue;
+
               const metadata = parseMetadata(file.metadata as string | ImageMetadata | undefined);
               const image: GeneratedImage = {
-                image: `/Output/${file.src}`,
+                image: imagePath,
                 metadata: metadata || { prompt: "", model: "", seed: 0, steps: 0, cfgscale: 0, width: 0, height: 0 },
                 batch_id: `reconnect-${generationStartTime}`,
               };
               newImages.push(image);
               // Only add a few images to avoid flooding
-              if (newImages.length >= 5) break;
+              if (newImages.length >= 10) break;
             }
 
             if (newImages.length > 0) {
@@ -396,7 +482,6 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
             isGenerating: false,
             isReconnected: false,
             reconnectedGeneration: null,
-            queuedCount: 0,
           });
           stopPolling();
         }
@@ -404,15 +489,16 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
         console.error("Polling failed:", error);
       }
     }, interval);
-
-    // Run immediately once
-    checkActiveGenerations(sessionId);
   },
 
   stopPolling: () => {
     if (pollIntervalId) {
       clearInterval(pollIntervalId);
       pollIntervalId = null;
+    }
+    if (syncTimeoutId) {
+      clearTimeout(syncTimeoutId);
+      syncTimeoutId = null;
     }
   },
 
@@ -430,9 +516,6 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
       }, sessionId);
 
       console.log("[Generation] ListImages response:", imagesResponse.files.length, "files,", imagesResponse.folders.length, "folders");
-      if (imagesResponse.folders.length > 0) {
-        console.log("[Generation] Folders found:", imagesResponse.folders.slice(0, 5));
-      }
 
       // Filter to images created after session start time
       const filteredFiles = imagesResponse.files.filter(file => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useLoraStore, CONFINEMENT_OPTIONS, type SelectedLora } from "@/stores/loras";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -40,6 +41,37 @@ function stripHtml(html: string): string {
 
 export function SelectedLoraItem({ lora }: SelectedLoraItemProps) {
   const { setWeight, setConfinement, deselectLora } = useLoraStore();
+
+  // Local state for weight input to allow typing freely
+  const [weightInput, setWeightInput] = useState(String(lora.weight ?? 1));
+
+  // Sync local state when lora.weight changes externally (e.g., from slider)
+  useEffect(() => {
+    const currentValue = parseFloat(weightInput);
+    if (currentValue !== lora.weight) {
+      setWeightInput(String(lora.weight ?? 1));
+    }
+  }, [lora.weight]);
+
+  const handleWeightInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setWeightInput(e.target.value);
+  };
+
+  const handleWeightInputBlur = () => {
+    const value = parseFloat(weightInput);
+    if (!Number.isNaN(value)) {
+      setWeight(lora.name, value);
+    } else {
+      // Reset to current weight if invalid
+      setWeightInput(String(lora.weight ?? 1));
+    }
+  };
+
+  const handleWeightInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.currentTarget.blur();
+    }
+  };
 
   // Get display name (last part of path, without extension)
   const displayName = lora.name.includes("/")
@@ -91,8 +123,10 @@ export function SelectedLoraItem({ lora }: SelectedLoraItemProps) {
         />
         <Input
           type="number"
-          value={Number.isNaN(lora.weight) ? 1 : lora.weight}
-          onChange={(e) => setWeight(lora.name, parseFloat(e.target.value) || 1)}
+          value={weightInput}
+          onChange={handleWeightInputChange}
+          onBlur={handleWeightInputBlur}
+          onKeyDown={handleWeightInputKeyDown}
           className="w-[4.5rem] h-7 text-xs text-center"
           step={0.05}
           min={-2}

@@ -40,20 +40,24 @@ export function NavHeader() {
   const { waitingGens, liveGens, loadingModels } = useStatusStore();
   const { downloads } = useDownloadsStore();
   const {
-    currentRequest,
     isGenerating,
     isGeneratingForever,
     isReconnected,
     reconnectedGeneration,
-    queuedCount,
+    activeRequests,
     batch,
-    cancelGeneration,
-    resetQueue,
+    cancelAllGenerations,
     clearBatch,
     checkActiveGenerations,
     startPolling,
-    stopPolling
+    stopPolling,
+    getPrimaryRequest,
+    getActiveCount,
   } = useGenerationStore();
+
+  const primaryRequest = getPrimaryRequest();
+  const activeCount = getActiveCount();
+  const queuedCount = Math.max(0, activeCount - 1);
 
   // Check for active generations on mount (only once)
   const hasCheckedRef = useRef(false);
@@ -182,8 +186,7 @@ export function NavHeader() {
                               console.error("Failed to interrupt:", e);
                             }
                           }
-                          cancelGeneration();
-                          resetQueue();
+                          cancelAllGenerations();
                           stopPolling();
                         }}
                       >
@@ -251,7 +254,7 @@ export function NavHeader() {
                   )}
 
                   {/* Current Generation (WebSocket mode) */}
-                  {currentRequest && !isReconnected && (
+                  {primaryRequest && !isReconnected && (
                     <div className="p-2 rounded-md bg-muted/50 space-y-2">
                       <div className="flex items-center justify-between text-sm">
                         <span className="font-medium flex items-center gap-1.5">
@@ -264,39 +267,39 @@ export function NavHeader() {
                             </Badge>
                           )}
                         </span>
-                        {queuedCount > 0 && (
+                        {activeCount > 1 && (
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {queuedCount} queued
+                            {activeCount} active
                           </span>
                         )}
                       </div>
 
                       {/* Progress */}
-                      {currentRequest.progress && (
+                      {primaryRequest.progress && (
                         <>
                           <div className="flex items-center gap-2">
                             <Progress
-                              value={currentRequest.progress.current_percent * 100}
+                              value={primaryRequest.progress.current_percent * 100}
                               className="h-1.5 flex-1"
                             />
                             <span className="text-xs text-muted-foreground w-12 text-right">
-                              {Math.round(currentRequest.progress.current_percent * 100)}%
+                              {Math.round(primaryRequest.progress.current_percent * 100)}%
                             </span>
                           </div>
-                          {currentRequest.progress.batch_index > 0 && (
+                          {primaryRequest.progress.batch_index > 0 && (
                             <p className="text-xs text-muted-foreground">
-                              Image {currentRequest.progress.batch_index + 1} • Overall {Math.round(currentRequest.progress.overall_percent * 100)}%
+                              Image {primaryRequest.progress.batch_index + 1} • Overall {Math.round(primaryRequest.progress.overall_percent * 100)}%
                             </p>
                           )}
                         </>
                       )}
 
                       {/* Preview thumbnail */}
-                      {currentRequest.previewImage && (
+                      {primaryRequest.previewImage && (
                         <div className="relative aspect-square w-full max-w-[120px] rounded overflow-hidden bg-muted mx-auto">
                           <img
-                            src={currentRequest.previewImage}
+                            src={primaryRequest.previewImage}
                             alt="Preview"
                             className="w-full h-full object-cover"
                           />
@@ -305,7 +308,7 @@ export function NavHeader() {
 
                       {/* Elapsed time */}
                       <p className="text-xs text-muted-foreground text-center">
-                        {formatElapsed(currentRequest.startTime)} elapsed
+                        {formatElapsed(primaryRequest.startTime)} elapsed
                       </p>
                     </div>
                   )}

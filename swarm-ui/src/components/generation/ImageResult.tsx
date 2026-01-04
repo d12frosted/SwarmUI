@@ -45,16 +45,16 @@ interface ImageResultProps {
 }
 
 export function ImageResult({ className, selectedIndex, onIndexChange }: ImageResultProps) {
-  const { currentRequest, batch, removeFromBatch, starredImages, setImageStarred } = useGenerationStore();
+  const { getPrimaryRequest, isGenerating, batch, removeFromBatch, starredImages, setImageStarred } = useGenerationStore();
+  const primaryRequest = getPrimaryRequest();
   const { sessionId } = useSessionStore();
   const [fullViewOpen, setFullViewOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [previewRatio, setPreviewRatio] = useState<PreviewRatio>("S");
 
-  const previewImage = currentRequest?.previewImage;
-  const isGenerating = currentRequest?.status === "generating";
-  const progress = currentRequest?.progress;
+  const previewImage = primaryRequest?.previewImage;
+  const progress = primaryRequest?.progress;
 
   // Determine which image to display
   const currentIndex = selectedIndex ?? (batch.length > 0 ? batch.length - 1 : -1);
@@ -150,11 +150,27 @@ export function ImageResult({ className, selectedIndex, onIndexChange }: ImageRe
     try {
       // Try to delete from disk if it's a saved file (not a data URL)
       if (!displayImage.image.startsWith("data:")) {
-        const imagePath = displayImage.image.replace(/^\/Output\//, "");
-        try {
-          await deleteImage(imagePath, sessionId);
-        } catch (e) {
-          console.warn("Could not delete from disk:", e);
+        // Extract relative path - handle various formats:
+        // /Output/2025-01-04/file.png -> 2025-01-04/file.png
+        // /Output/Images/2025-01-04/file.png -> Images/2025-01-04/file.png
+        // Output/2025-01-04/file.png -> 2025-01-04/file.png
+        // 2025-01-04/file.png -> 2025-01-04/file.png
+        let imagePath = displayImage.image;
+        if (imagePath.startsWith("/")) {
+          imagePath = imagePath.substring(1);
+        }
+        if (imagePath.startsWith("Output/")) {
+          imagePath = imagePath.substring(7);
+        }
+
+        // Only try to delete if path looks valid (contains a date pattern or known folder)
+        if (imagePath && !imagePath.startsWith("/")) {
+          try {
+            console.log("[Delete] Attempting to delete:", imagePath, "from original:", displayImage.image);
+            await deleteImage(imagePath, sessionId);
+          } catch (e) {
+            console.warn("Could not delete from disk:", imagePath, e);
+          }
         }
       }
 

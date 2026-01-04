@@ -29,20 +29,19 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
   const { waitingGens, liveGens } = useStatusStore();
   const {
     isGenerating,
-    currentRequest,
+    activeRequests,
     isGeneratingForever,
-    queuedCount,
     startGeneration,
     updateProgress,
     setPreviewImage,
     addGeneratedImage,
     completeGeneration,
     failGeneration,
-    cancelGeneration,
+    cancelAllGenerations,
     setGeneratingForever,
-    incrementQueue,
-    decrementQueue,
-    resetQueue,
+    getActiveCount,
+    getPrimaryRequest,
+    syncWithServer,
   } = useGenerationStore();
   const { updateFromWSMessage } = useStatusStore();
   const { getGenerationInput } = useParametersStore();
@@ -71,20 +70,13 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
     // Get generation parameters
     const input = getGenerationInput();
 
-    // If already generating, this is adding to queue
-    const isAddingToQueue = isGenerating;
+    // Start a new tracked request
+    const requestId = startGeneration(input);
+    const activeCount = getActiveCount();
 
-    // Only create new request if not adding to queue
-    const requestId = isAddingToQueue
-      ? `queue-${Date.now()}`  // Dummy ID for queued items
-      : startGeneration(input);
+    console.log(`[GenerateButton] Starting generation ${requestId}, active: ${activeCount}`);
 
-    // Track queue count in store
-    if (isAddingToQueue) {
-      incrementQueue();
-    }
-
-    // Create WebSocket connection
+    // Create WebSocket connection for this request
     const client = new WSClient("GenerateText2ImageWS", {
       sessionId,
       onMessage: (data) => {
@@ -95,14 +87,14 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
           updateFromWSMessage(message.status);
         }
 
-        // Handle progress updates - only for main generation, not queued
-        if (message.gen_progress && !isAddingToQueue) {
+        // Handle progress updates
+        if (message.gen_progress) {
           updateProgress(requestId, message.gen_progress);
           onProgress?.(message.gen_progress);
         }
 
-        // Handle preview image - only for main generation
-        if (message.gen_progress?.preview && !isAddingToQueue) {
+        // Handle preview image
+        if (message.gen_progress?.preview) {
           setPreviewImage(requestId, message.gen_progress.preview);
         }
 
@@ -147,14 +139,7 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
             batch_id: requestId,
           };
 
-          // For queued items, add directly to batch without updating currentRequest
-          if (isAddingToQueue) {
-            useGenerationStore.setState(state => ({
-              batch: [...state.batch, generatedImage]
-            }));
-          } else {
-            addGeneratedImage(requestId, generatedImage);
-          }
+          addGeneratedImage(requestId, generatedImage);
           onImageGenerated?.(generatedImage);
         }
 
@@ -195,13 +180,7 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
               batch_id: requestId,
             };
 
-            if (isAddingToQueue) {
-              useGenerationStore.setState(state => ({
-                batch: [...state.batch, generatedImage]
-              }));
-            } else {
-              addGeneratedImage(requestId, generatedImage);
-            }
+            addGeneratedImage(requestId, generatedImage);
             onImageGenerated?.(generatedImage);
           }
         }
@@ -209,27 +188,30 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
         // Handle errors
         if (message.error) {
           setLastError(message.error);
-          if (!isAddingToQueue) {
-            failGeneration(requestId, message.error);
-          }
+          failGeneration(requestId, message.error);
           client.disconnect();
         }
       },
       onError: (error) => {
         setLastError(error.message);
-        if (!isAddingToQueue) {
-          failGeneration(requestId, error.message);
-        }
+        failGeneration(requestId, error.message);
       },
       onStateChange: (state) => {
         if (state === "completed" || state === "disconnected") {
-          // Decrement queue count when a queued item completes
-          if (isAddingToQueue) {
-            decrementQueue();
-          } else if (useGenerationStore.getState().currentRequest?.id === requestId) {
+          // Check if this request is still active (not already failed)
+          const currentRequests = useGenerationStore.getState().activeRequests;
+          if (currentRequests[requestId]) {
             completeGeneration(requestId);
-            // If generate forever is enabled, start a new generation
-            if (generateForeverRef.current) {
+
+            // Sync with server to detect any missed generations
+            if (sessionId) {
+              setTimeout(() => {
+                syncWithServer(sessionId);
+              }, 500);
+            }
+
+            // If generate forever is enabled and no errors, start a new generation
+            if (generateForeverRef.current && state === "completed") {
               setTimeout(() => {
                 handleGenerate();
               }, 100);
@@ -242,19 +224,14 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
     try {
       await client.connect(input);
     } catch (error) {
-      if (!isAddingToQueue) {
-        failGeneration(
-          requestId,
-          error instanceof Error ? error.message : "Failed to connect"
-        );
-      } else {
-        decrementQueue();
-      }
+      failGeneration(
+        requestId,
+        error instanceof Error ? error.message : "Failed to connect"
+      );
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     sessionId,
-    isGenerating,
     getGenerationInput,
     startGeneration,
     updateProgress,
@@ -272,22 +249,24 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
 
     try {
       await interruptAll(sessionId);
-      cancelGeneration();
-      resetQueue();
+      cancelAllGenerations();
     } catch (error) {
       console.error("Failed to interrupt:", error);
     }
-  }, [sessionId, cancelGeneration, resetQueue]);
+  }, [sessionId, cancelAllGenerations]);
 
-  const progress = currentRequest?.progress;
+  // Get progress from primary request
+  const primaryRequest = getPrimaryRequest();
+  const progress = primaryRequest?.progress;
   const progressPercent = progress
     ? Math.round(progress.overall_percent * 100)
     : 0;
 
-  // Combine backend queue info with store tracking
-  const totalQueued = Math.max(waitingGens + liveGens, queuedCount + (isGenerating ? 1 : 0));
+  // Count active requests for queue display
+  const localActiveCount = Object.keys(activeRequests).length;
+  const totalQueued = Math.max(waitingGens + liveGens, localActiveCount);
   const hasQueue = totalQueued > 0 || isGenerating;
-  const displayQueueCount = Math.max(waitingGens, queuedCount);
+  const displayQueueCount = Math.max(0, localActiveCount - 1); // Exclude the "currently generating" one
   const queueFull = waitingGens > 10;
 
   return (
@@ -370,8 +349,8 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
         <div className="flex items-center justify-between text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
           <span className="flex items-center gap-1.5">
             <ListOrdered className="h-3 w-3" />
-            {isGenerating ? "1 generating" : `${liveGens} generating`}
-            {displayQueueCount > 0 && `, ${displayQueueCount} queued`}
+            {localActiveCount} active
+            {waitingGens > 0 && `, ${waitingGens} waiting on server`}
           </span>
           {queueFull && (
             <span className="text-destructive">Queue full</span>
@@ -380,7 +359,7 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
       )}
 
       {/* Progress indicator */}
-      {isGenerating && (
+      {isGenerating && primaryRequest && (
         <div className="space-y-1">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground flex items-center gap-1.5">

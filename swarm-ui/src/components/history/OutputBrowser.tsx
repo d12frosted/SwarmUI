@@ -407,13 +407,28 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
     setIsDeleting(true);
     try {
       await deleteImage(deleteTarget.fullPath, sessionId);
+
+      // If viewing the deleted image in full view, navigate to next/previous
+      if (selectedImage?.fullPath === deleteTarget.fullPath) {
+        if (filteredImages.length <= 1) {
+          // Was the only image, close dialog
+          setFullViewOpen(false);
+          setSelectedImage(null);
+        } else if (selectedIndex >= filteredImages.length - 1) {
+          // Was the last image, go to previous
+          const newIndex = selectedIndex - 1;
+          setSelectedIndex(newIndex);
+          setSelectedImage(filteredImages[newIndex]);
+        } else {
+          // Stay at same index - next image will slide into position after filter update
+          // But we need to pre-select the next image since filteredImages hasn't updated yet
+          const nextImage = filteredImages[selectedIndex + 1];
+          setSelectedImage(nextImage);
+        }
+      }
+
       // Remove from local state
       setAllImages(prev => prev.filter(img => img.fullPath !== deleteTarget.fullPath));
-      // Close full view if viewing the deleted image
-      if (selectedImage?.fullPath === deleteTarget.fullPath) {
-        setFullViewOpen(false);
-        setSelectedImage(null);
-      }
     } catch (error) {
       console.error("Failed to delete image:", error);
     } finally {

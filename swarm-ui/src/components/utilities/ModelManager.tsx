@@ -5,6 +5,7 @@ import DOMPurify from "dompurify";
 import { useSessionStore } from "@/stores/session";
 import { useDownloadsStore, formatSpeed, formatBytes, formatElapsed, estimateTimeRemainingFromBytes, type CivitaiMetadata, type CivitaiVersionInfo } from "@/stores/downloads";
 import { listModels, deleteModel, triggerRefresh } from "@/lib/api";
+import { useModelsStore } from "@/stores/models";
 import { parseCivitaiUrl, parseHuggingFaceUrl, fetchCivitaiMetadata, fetchImageAsBase64 } from "@/lib/api/endpoints/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -72,6 +73,7 @@ const MODEL_TYPES = [
 export function ModelManager() {
   const { sessionId } = useSessionStore();
   const { downloads, addDownload, startDownload, cancelDownload, clearCompleted } = useDownloadsStore();
+  const { invalidate: invalidateModelsStore } = useModelsStore();
 
   const [modelType, setModelType] = useState("Stable-Diffusion");
   const [models, setModels] = useState<ModelData[]>([]);
@@ -132,8 +134,10 @@ export function ModelManager() {
     const hasCompleted = downloads.some((d) => d.status === "complete");
     if (hasCompleted) {
       loadModels();
+      // Also invalidate the global models store so generate page gets fresh data
+      invalidateModelsStore();
     }
-  }, [downloads, loadModels]);
+  }, [downloads, loadModels, invalidateModelsStore]);
 
   const handleRefresh = useCallback(async () => {
     if (!sessionId) return;
@@ -177,12 +181,23 @@ export function ModelManager() {
             if (metadata.modelType) {
               setDownloadType(metadata.modelType);
             }
-            // Suggest name from metadata
+            // Suggest name from metadata - prefer actual filename from CivitAI
             if (!downloadName.trim()) {
-              const suggestedName = metadata.title
-                .replace(/[<>:"/\\|?*]/g, "")
-                .replace(/\s+/g, "_")
-                .substring(0, 50);
+              // Get the actual filename from the version, or fall back to title
+              const currentVersion = metadata.availableVersions?.find(v => v.id === metadata.versionId);
+              const actualFileName = currentVersion?.fileName;
+
+              let suggestedName: string;
+              if (actualFileName) {
+                // Use actual filename, strip extension
+                suggestedName = actualFileName
+                  .replace(/\.(safetensors|sft|ckpt|pt|pth|bin|gguf)$/i, "");
+              } else {
+                // Fallback to title
+                suggestedName = metadata.title
+                  .replace(/[<>:"/\\|?*]/g, "")
+                  .replace(/\s+/g, "_");
+              }
               setDownloadName(suggestedName);
             }
             setShowPreviewDialog(true);
@@ -243,12 +258,19 @@ export function ModelManager() {
     if (newVersion) {
       setSelectedVersion(newVersion);
       setPendingDownloadUrl(newVersion.downloadUrl);
-      // Update suggested name to include version
-      const baseName = previewMetadata.title.split(" - ")[0];
-      const suggestedName = `${baseName} - ${newVersion.name}`
-        .replace(/[<>:"/\\|?*]/g, "")
-        .replace(/\s+/g, "_")
-        .substring(0, 50);
+      // Update suggested name - prefer actual filename from CivitAI
+      let suggestedName: string;
+      if (newVersion.fileName) {
+        // Use actual filename, strip extension
+        suggestedName = newVersion.fileName
+          .replace(/\.(safetensors|sft|ckpt|pt|pth|bin|gguf)$/i, "");
+      } else {
+        // Fallback to title + version name
+        const baseName = previewMetadata.title.split(" - ")[0];
+        suggestedName = `${baseName} - ${newVersion.name}`
+          .replace(/[<>:"/\\|?*]/g, "")
+          .replace(/\s+/g, "_");
+      }
       setDownloadName(suggestedName);
     }
   }, [previewMetadata]);

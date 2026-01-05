@@ -19,7 +19,7 @@ import {
   Card,
   CardContent,
 } from "@/components/ui/card";
-import { Search, Check, Loader2, ChevronDown } from "lucide-react";
+import { Search, Check, Loader2, ChevronDown, RefreshCw } from "lucide-react";
 import type { ModelData } from "@/types/api";
 
 /** Strip HTML tags and decode entities for plain text display */
@@ -45,7 +45,7 @@ interface ModelSelectorProps {
 
 export function ModelSelector({ onModelSelect }: ModelSelectorProps) {
   const { sessionId, isInitialized } = useSessionStore();
-  const { loadedModels, isLoading, isLoaded, loadModels, searchQuery, setSearchQuery, getFilteredModels, getModelByName } = useModelsStore();
+  const { loadedModels, isLoading, isLoaded, loadModels, refreshModels, searchQuery, setSearchQuery, getFilteredModels, getModelByName } = useModelsStore();
   const { values, setValue } = useParametersStore();
   const [open, setOpen] = useState(false);
 
@@ -57,6 +57,12 @@ export function ModelSelector({ onModelSelect }: ModelSelectorProps) {
       loadModels(sessionId);
     }
   }, [isInitialized, sessionId, isLoaded, isLoading, loadModels]);
+
+  const handleRefresh = async () => {
+    if (sessionId && !isLoading) {
+      await refreshModels(sessionId);
+    }
+  };
 
   const handleSelectModel = (modelName: string) => {
     setValue("model", modelName);
@@ -98,7 +104,18 @@ export function ModelSelector({ onModelSelect }: ModelSelectorProps) {
         </DialogTrigger>
         <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Select Model</DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle>Select Model</DialogTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleRefresh}
+                disabled={isLoading}
+                className="h-8 w-8"
+              >
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
           </DialogHeader>
 
           {/* Search */}

@@ -21,12 +21,14 @@ interface ModelsState {
 
   // Actions
   loadModels: (sessionId: string) => Promise<void>;
+  refreshModels: (sessionId: string) => Promise<void>;
   refreshLoadedModels: (sessionId: string) => Promise<void>;
   setCurrentModel: (modelName: string | null) => void;
   setSearchQuery: (query: string) => void;
   setModelClass: (cls: string | null) => void;
   getFilteredModels: () => ModelData[];
   getModelByName: (name: string) => ModelData | undefined;
+  invalidate: () => void;
 }
 
 export const useModelsStore = create<ModelsState>((set, get) => ({
@@ -67,6 +69,31 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     }
   },
 
+  refreshModels: async (sessionId: string) => {
+    // Force refresh - reload even if already loaded
+    set({ isLoading: true, error: null });
+
+    try {
+      const response = await listModels({}, sessionId);
+
+      const loadedModels = response.files
+        .filter((m) => m.loaded)
+        .map((m) => m.name);
+
+      set({
+        models: response.files,
+        loadedModels,
+        isLoaded: true,
+      });
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : "Failed to load models",
+      });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
   refreshLoadedModels: async (sessionId: string) => {
     try {
       const response = await listLoadedModels(sessionId);
@@ -74,6 +101,11 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     } catch (error) {
       console.error("Failed to refresh loaded models:", error);
     }
+  },
+
+  invalidate: () => {
+    // Mark as not loaded so next loadModels call will fetch fresh data
+    set({ isLoaded: false });
   },
 
   setCurrentModel: (modelName: string | null) => {

@@ -58,12 +58,12 @@ export function NavHeader() {
 
   // Get primary reconnected generation (the one actively generating)
   const reconnectedGeneration = reconnectedGenerations.find(g => g.live_gens > 0) || reconnectedGenerations[0];
-  const { generating: reconnectedGenerating, queued: reconnectedQueued } =
-    isReconnected ? getTotalImageCount() : { generating: 0, queued: 0 };
+
+  // Get image counts (works for both local tracking and reconnected mode)
+  const { generating: generatingImages, queued: queuedImages } = getTotalImageCount();
 
   const primaryRequest = getPrimaryRequest();
   const activeCount = getActiveCount();
-  const queuedCount = Math.max(0, activeCount - 1);
 
   // Check for active generations on mount (only once)
   const hasCheckedRef = useRef(false);
@@ -155,24 +155,22 @@ export function NavHeader() {
                   )}
                 >
                   {isGenerating ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>{generatingImages > 0 ? `${generatingImages} generating...` : "generating..."}</span>
+                      {/* Show queued image count */}
+                      {queuedImages > 0 && (
+                        <span className="text-purple-400">+{queuedImages}</span>
+                      )}
+                      {isGeneratingForever && (
+                        <Repeat className="h-3 w-3 ml-0.5" />
+                      )}
+                    </>
                   ) : (
-                    <Image className="h-4 w-4" />
-                  )}
-                  {/* Show queue count when generating multiple */}
-                  {isGenerating && activeCount > 1 && (
-                    <span className="text-purple-400">+{activeCount - 1}</span>
-                  )}
-                  {/* Separator when both queue and batch shown */}
-                  {isGenerating && activeCount > 1 && batch.length > 0 && (
-                    <span className="text-muted-foreground/50">│</span>
-                  )}
-                  {/* Total batch count */}
-                  {batch.length > 0 && (
-                    <span>{batch.length}</span>
-                  )}
-                  {isGeneratingForever && (
-                    <Repeat className="h-3 w-3 ml-0.5" />
+                    <>
+                      <Image className="h-4 w-4" />
+                      <span>idle</span>
+                    </>
                   )}
                 </button>
               </PopoverTrigger>
@@ -217,12 +215,12 @@ export function NavHeader() {
                       <div className="flex items-center justify-between text-sm">
                         <span className="font-medium flex items-center gap-1.5">
                           <Loader2 className="h-3 w-3 animate-spin" />
-                          {reconnectedGenerating > 0 ? `${reconnectedGenerating} generating` : "Generating..."}
+                          {generatingImages > 0 ? `${generatingImages} generating` : "Generating..."}
                         </span>
-                        {reconnectedQueued > 0 && (
+                        {queuedImages > 0 && (
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {reconnectedQueued} queued
+                            {queuedImages} queued
                           </span>
                         )}
                       </div>
@@ -274,7 +272,7 @@ export function NavHeader() {
                       <div className="flex items-center justify-between text-sm">
                         <span className="font-medium flex items-center gap-1.5">
                           <Loader2 className="h-3 w-3 animate-spin" />
-                          Generating...
+                          {generatingImages > 0 ? `${generatingImages} generating` : "Generating..."}
                           {isGeneratingForever && (
                             <Badge variant="outline" className="text-xs ml-1">
                               <Repeat className="h-2.5 w-2.5 mr-0.5" />
@@ -282,10 +280,10 @@ export function NavHeader() {
                             </Badge>
                           )}
                         </span>
-                        {activeCount > 1 && (
+                        {queuedImages > 0 && (
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {activeCount} active
+                            {queuedImages} queued
                           </span>
                         )}
                       </div>

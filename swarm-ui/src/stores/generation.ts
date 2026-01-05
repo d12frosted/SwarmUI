@@ -365,12 +365,16 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
       return { generating, queued };
     }
 
-    // Fallback: use server counts from reconnected state (these are request counts, not image counts)
-    // We show them as "images" for UI consistency, accepting we can't know actual batch sizes
+    // Fallback: use server data from reconnected state
     if (isReconnected && reconnectedGeneration) {
+      // Use total_images if available (batch size), otherwise fall back to request counts
+      const totalImages = reconnectedGeneration.total_images || 0;
+      const completedImages = reconnectedGeneration.batch_index || 0;
+      const remainingImages = Math.max(0, totalImages - completedImages);
+
       return {
-        generating: reconnectedGeneration.live_gens,
-        queued: reconnectedGeneration.waiting_gens,
+        generating: totalImages > 0 ? remainingImages : reconnectedGeneration.live_gens,
+        queued: reconnectedGeneration.waiting_gens, // Other requests in queue (we don't have their batch sizes)
       };
     }
 

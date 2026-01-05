@@ -98,6 +98,9 @@ public class Session : IEquatable<Session>
         /// <summary>The number of generations tracked by this object.</summary>
         public int WaitingGenerations = 0, LoadingModels = 0, WaitingBackends = 0, LiveGens = 0;
 
+        /// <summary>Total number of images this claim will generate (batch size).</summary>
+        public int TotalImages = 0;
+
         /// <summary>The user request ID for this generation (for reconnection tracking).</summary>
         public long UserRequestId = 0;
 

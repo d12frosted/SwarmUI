@@ -292,6 +292,7 @@ public static class T2IAPI
         // Track generation info for reconnection support
         claim.UserRequestId = user_input.UserRequestId;
         claim.ModelName = user_input.Get(T2IParamTypes.Model)?.Name ?? "";
+        claim.TotalImages = images;
         Logs.Info($"User {session.User.UserID} requested {images} image{(images == 1 ? "" : "s")} with model '{user_input.Get(T2IParamTypes.Model)?.Name}'...");
         if (Logs.MinimumLevel <= Logs.LogLevel.Verbose)
         {

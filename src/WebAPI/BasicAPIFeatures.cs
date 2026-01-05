@@ -459,6 +459,7 @@ public static class BasicAPIFeatures
                     ["start_time"] = claim.StartTimeUnix,
                     ["waiting_gens"] = claim.WaitingGenerations,
                     ["live_gens"] = claim.LiveGens,
+                    ["total_images"] = claim.TotalImages,
                     ["preview"] = claim.PreviewImage
                 });
             }

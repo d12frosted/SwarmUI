@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -50,6 +51,26 @@ export function ImageViewerDialog({
 }: ImageViewerDialogProps) {
   const canGoPrev = showNavigation && currentIndex > 0;
   const canGoNext = showNavigation && currentIndex < totalCount - 1;
+
+  // Keyboard navigation - left=newer (next index), right=older (prev index)
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (!open || !showNavigation || !onNavigate) return;
+
+    if (e.key === "ArrowLeft" && canGoNext) {
+      e.preventDefault();
+      onNavigate(1);
+    } else if (e.key === "ArrowRight" && canGoPrev) {
+      e.preventDefault();
+      onNavigate(-1);
+    }
+  }, [open, showNavigation, onNavigate, canGoPrev, canGoNext]);
+
+  useEffect(() => {
+    if (open) {
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [open, handleKeyDown]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

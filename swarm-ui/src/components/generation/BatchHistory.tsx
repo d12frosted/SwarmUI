@@ -134,6 +134,7 @@ export function BatchHistory({ onImageSelect, selectedIndex }: BatchHistoryProps
         {reversedBatch.map((image, reversedIndex) => {
           // Calculate original index for selection
           const originalIndex = batch.length - 1 - reversedIndex;
+          const starred = isImageStarred(image);
 
           return (
             <div
@@ -142,7 +143,9 @@ export function BatchHistory({ onImageSelect, selectedIndex }: BatchHistoryProps
                 "relative group cursor-pointer rounded-md overflow-hidden border-2 transition-colors bg-muted/30",
                 selectedIndex === originalIndex
                   ? "border-primary"
-                  : "border-transparent hover:border-muted-foreground/50"
+                  : starred
+                    ? "border-yellow-500/70"
+                    : "border-transparent hover:border-muted-foreground/50"
               )}
               onClick={() => onImageSelect?.(image, originalIndex)}
             >

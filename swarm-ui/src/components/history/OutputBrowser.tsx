@@ -97,7 +97,7 @@ const orientationConfig: Record<"landscape" | "portrait" | "square", string> = {
 export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) {
   const router = useRouter();
   const { sessionId } = useSessionStore();
-  const { starredImages, setImageStarred } = useGenerationStore();
+  const { starredImages, setImageStarred, batch, removeFromBatch } = useGenerationStore();
 
   // Data state
   const [allImages, setAllImages] = useState<OutputImage[]>([]);
@@ -249,14 +249,24 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
         }
       }
 
-      // Starred filter - check multiple locations
+      // Starred filter - check local state first, then metadata
       if (starredOnly) {
-        const extraData = (img.metadata?.Sui_extra_data || img.metadata?.sui_extra_data || {}) as Record<string, unknown>;
-        const isStarred = img.metadata?.starred ||
-                          extraData.starred ||
-                          img.fullPath.toLowerCase().includes("starred");
-        if (!isStarred) {
+        // Check local starred state (both path formats)
+        const localStarred = starredImages[img.fullPath] || starredImages[`/Output/${img.fullPath}`];
+        if (localStarred === true) {
+          // Explicitly starred locally - include
+        } else if (localStarred === false) {
+          // Explicitly unstarred locally - exclude
           return false;
+        } else {
+          // Not in local state - check metadata
+          const extraData = (img.metadata?.Sui_extra_data || img.metadata?.sui_extra_data || {}) as Record<string, unknown>;
+          const metaStarred = img.metadata?.starred ||
+                            extraData.starred ||
+                            img.fullPath.toLowerCase().includes("starred");
+          if (!metaStarred) {
+            return false;
+          }
         }
       }
 
@@ -305,7 +315,7 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
     });
 
     return filtered;
-  }, [allImages, searchQuery, starredOnly, selectedModel, selectedLora, dateFrom, dateTo, sortBy, sortOrder]);
+  }, [allImages, searchQuery, starredOnly, starredImages, selectedModel, selectedLora, dateFrom, dateTo, sortBy, sortOrder]);
 
   // Build image URL
   const getImageUrl = (fullPath: string) => `/Output/${fullPath}`;
@@ -429,6 +439,15 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
 
       // Remove from local state
       setAllImages(prev => prev.filter(img => img.fullPath !== deleteTarget.fullPath));
+
+      // Also remove from generation batch if present (sync with generate page)
+      const batchIndex = batch.findIndex(img =>
+        img.image === `/Output/${deleteTarget.fullPath}` ||
+        img.image === deleteTarget.fullPath
+      );
+      if (batchIndex !== -1) {
+        removeFromBatch(batchIndex);
+      }
     } catch (error) {
       console.error("Failed to delete image:", error);
     } finally {
@@ -654,12 +673,15 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
             </div>
           ) : (
             <div className={cn("grid gap-2", sizeConfig[thumbnailSize].cols)}>
-              {filteredImages.map((image, idx) => (
+              {filteredImages.map((image, idx) => {
+                const starred = isImageStarred(image);
+                return (
                 <div
                   key={image.fullPath}
                   className={cn(
                     "group relative rounded-md overflow-hidden bg-muted cursor-pointer",
-                    orientationConfig[cardOrientation]
+                    orientationConfig[cardOrientation],
+                    starred && "ring-2 ring-yellow-500/70 ring-offset-1 ring-offset-background"
                   )}
                   onClick={() => {
                     if (onImageSelect) {
@@ -680,9 +702,9 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
                   </div>
 
                   {/* Starred indicator (always visible when starred) */}
-                  {isImageStarred(image) && (
+                  {starred && (
                     <div className="absolute top-1 left-1">
-                      <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
+                      <Star className="h-4 w-4 fill-yellow-500 text-yellow-500 drop-shadow-sm" />
                     </div>
                   )}
 
@@ -734,7 +756,8 @@ export function OutputBrowser({ className, onImageSelect }: OutputBrowserProps) 
                     </Button>
                   </div>
                 </div>
-              ))}
+              );
+              })}
             </div>
           )}
         </div>

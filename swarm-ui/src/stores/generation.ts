@@ -7,6 +7,7 @@ import { getActiveGenerations, listImages } from "@/lib/api";
 export interface GenerationRequest {
   id: string;
   params: Record<string, unknown>;
+  batchSize: number; // Number of images this request will generate
   status: "pending" | "generating" | "completed" | "error";
   progress: GenerationProgress | null;
   previewImage: string | null;
@@ -65,6 +66,7 @@ interface GenerationState {
 
   // Helpers
   getActiveCount: () => number;
+  getTotalImageCount: () => { generating: number; queued: number };
   getPrimaryRequest: () => GenerationRequest | null;
 
   // Reconnection actions
@@ -119,9 +121,13 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     const batchId = get().batchId || generateId();
     const { activeRequests, primaryRequestId } = get();
 
+    // Extract batch size from params (images parameter)
+    const batchSize = Math.max(1, Number(params.images) || 1);
+
     const request: GenerationRequest = {
       id,
       params,
+      batchSize,
       status: "generating",
       progress: null,
       previewImage: null,
@@ -141,7 +147,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
       batchId,
     });
 
-    console.log(`[Generation] Started request ${id}, active count: ${Object.keys(newActiveRequests).length}`);
+    console.log(`[Generation] Started request ${id}, batch size: ${batchSize}, active count: ${Object.keys(newActiveRequests).length}`);
     return id;
   },
 
@@ -331,6 +337,44 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
 
   getActiveCount: () => {
     return Object.keys(get().activeRequests).length;
+  },
+
+  getTotalImageCount: () => {
+    const { activeRequests, primaryRequestId, isReconnected, reconnectedGeneration } = get();
+    const requests = Object.values(activeRequests);
+
+    // If we have local request tracking, use accurate counts
+    if (requests.length > 0) {
+      let generating = 0;
+      let queued = 0;
+
+      for (const req of requests) {
+        // Get batch size - fallback to params.images or 1 for old requests without batchSize
+        const batchSize = req.batchSize || Number(req.params?.images) || 1;
+        // Calculate remaining images for this request
+        const generated = req.images.length;
+        const remaining = Math.max(0, batchSize - generated);
+
+        if (req.id === primaryRequestId) {
+          generating = remaining;
+        } else {
+          queued += batchSize; // Queued requests haven't started, count full batch
+        }
+      }
+
+      return { generating, queued };
+    }
+
+    // Fallback: use server counts from reconnected state (these are request counts, not image counts)
+    // We show them as "images" for UI consistency, accepting we can't know actual batch sizes
+    if (isReconnected && reconnectedGeneration) {
+      return {
+        generating: reconnectedGeneration.live_gens,
+        queued: reconnectedGeneration.waiting_gens,
+      };
+    }
+
+    return { generating: 0, queued: 0 };
   },
 
   getPrimaryRequest: () => {

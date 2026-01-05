@@ -40,6 +40,7 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
     cancelAllGenerations,
     setGeneratingForever,
     getActiveCount,
+    getTotalImageCount,
     getPrimaryRequest,
     syncWithServer,
   } = useGenerationStore();
@@ -262,11 +263,10 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
     ? Math.round(progress.overall_percent * 100)
     : 0;
 
-  // Count active requests for queue display
+  // Count images for queue display
+  const { generating: generatingImages, queued: queuedImages } = getTotalImageCount();
   const localActiveCount = Object.keys(activeRequests).length;
-  const totalQueued = Math.max(waitingGens + liveGens, localActiveCount);
-  const hasQueue = totalQueued > 0 || isGenerating;
-  const displayQueueCount = Math.max(0, localActiveCount - 1); // Exclude the "currently generating" one
+  const hasQueue = localActiveCount > 0 || isGenerating;
   const queueFull = waitingGens > 10;
 
   return (
@@ -285,9 +285,9 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
             <>
               <Plus className="mr-2 h-4 w-4" />
               Add to Queue
-              {displayQueueCount > 0 && (
+              {queuedImages > 0 && (
                 <span className="ml-2 bg-primary/20 text-primary px-1.5 py-0.5 rounded text-xs">
-                  +{displayQueueCount}
+                  +{queuedImages}
                 </span>
               )}
             </>
@@ -349,8 +349,10 @@ export function GenerateButton({ onImageGenerated, onProgress }: GenerateButtonP
         <div className="flex items-center justify-between text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
           <span className="flex items-center gap-1.5">
             <ListOrdered className="h-3 w-3" />
-            {localActiveCount} active
-            {waitingGens > 0 && `, ${waitingGens} waiting on server`}
+            {generatingImages > 0 && `${generatingImages} generating`}
+            {generatingImages > 0 && queuedImages > 0 && ", "}
+            {queuedImages > 0 && `${queuedImages} queued`}
+            {waitingGens > 0 && `, ${waitingGens} on server`}
           </span>
           {queueFull && (
             <span className="text-destructive">Queue full</span>

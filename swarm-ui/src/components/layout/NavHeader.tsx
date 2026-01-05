@@ -43,7 +43,7 @@ export function NavHeader() {
     isGenerating,
     isGeneratingForever,
     isReconnected,
-    reconnectedGeneration,
+    reconnectedGenerations,
     activeRequests,
     batch,
     cancelAllGenerations,
@@ -53,7 +53,13 @@ export function NavHeader() {
     stopPolling,
     getPrimaryRequest,
     getActiveCount,
+    getTotalImageCount,
   } = useGenerationStore();
+
+  // Get primary reconnected generation (the one actively generating)
+  const reconnectedGeneration = reconnectedGenerations.find(g => g.live_gens > 0) || reconnectedGenerations[0];
+  const { generating: reconnectedGenerating, queued: reconnectedQueued } =
+    isReconnected ? getTotalImageCount() : { generating: 0, queued: 0 };
 
   const primaryRequest = getPrimaryRequest();
   const activeCount = getActiveCount();
@@ -211,12 +217,12 @@ export function NavHeader() {
                       <div className="flex items-center justify-between text-sm">
                         <span className="font-medium flex items-center gap-1.5">
                           <Loader2 className="h-3 w-3 animate-spin" />
-                          Generating...
+                          {reconnectedGenerating > 0 ? `${reconnectedGenerating} generating` : "Generating..."}
                         </span>
-                        {(reconnectedGeneration.waiting_gens - reconnectedGeneration.live_gens) > 0 && (
+                        {reconnectedQueued > 0 && (
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {reconnectedGeneration.waiting_gens - reconnectedGeneration.live_gens} queued
+                            {reconnectedQueued} queued
                           </span>
                         )}
                       </div>

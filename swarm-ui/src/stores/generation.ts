@@ -33,7 +33,7 @@ interface GenerationState {
 
   // Reconnection state
   isReconnected: boolean;
-  reconnectedGeneration: ActiveGeneration | null;
+  reconnectedGenerations: ActiveGeneration[];
 
   // Batch of generated images (current session)
   batch: GeneratedImage[];
@@ -107,7 +107,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
   primaryRequestId: null,
   isGenerating: false,
   isReconnected: false,
-  reconnectedGeneration: null,
+  reconnectedGenerations: [],
   batch: [],
   batchId: null,
   starredImages: {},
@@ -240,7 +240,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
       history: newHistory,
       // Clear reconnected state if no more active requests
       isReconnected: isStillGenerating ? get().isReconnected : false,
-      reconnectedGeneration: isStillGenerating ? get().reconnectedGeneration : null,
+      reconnectedGenerations: isStillGenerating ? get().reconnectedGenerations : [],
     });
   },
 
@@ -340,7 +340,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
   },
 
   getTotalImageCount: () => {
-    const { activeRequests, primaryRequestId, isReconnected, reconnectedGeneration } = get();
+    const { activeRequests, primaryRequestId, isReconnected, reconnectedGenerations } = get();
     const requests = Object.values(activeRequests);
 
     // If we have local request tracking, use accurate counts
@@ -366,16 +366,24 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     }
 
     // Fallback: use server data from reconnected state
-    if (isReconnected && reconnectedGeneration) {
-      // Use total_images if available (batch size), otherwise fall back to request counts
-      const totalImages = reconnectedGeneration.total_images || 0;
-      const completedImages = reconnectedGeneration.batch_index || 0;
-      const remainingImages = Math.max(0, totalImages - completedImages);
+    if (isReconnected && reconnectedGenerations.length > 0) {
+      let generating = 0;
+      let queued = 0;
 
-      return {
-        generating: totalImages > 0 ? remainingImages : reconnectedGeneration.live_gens,
-        queued: reconnectedGeneration.waiting_gens, // Other requests in queue (we don't have their batch sizes)
-      };
+      for (const gen of reconnectedGenerations) {
+        const totalImages = gen.total_images || 1;
+
+        if (gen.live_gens > 0) {
+          // This is actively generating - calculate remaining
+          const completedImages = gen.batch_index || 0;
+          generating += Math.max(0, totalImages - completedImages);
+        } else if (gen.waiting_gens > 0) {
+          // This is queued - count full batch
+          queued += totalImages;
+        }
+      }
+
+      return { generating, queued };
     }
 
     return { generating: 0, queued: 0 };
@@ -389,20 +397,20 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
   syncWithServer: async (sessionId: string) => {
     try {
       const response = await getActiveGenerations(sessionId);
-      const serverGen = response.generations.find(g => g.live_gens > 0 || g.waiting_gens > 0);
+      const activeGens = response.generations.filter(g => g.live_gens > 0 || g.waiting_gens > 0);
       const { activeRequests, isReconnected } = get();
       const localCount = Object.keys(activeRequests).length;
 
-      if (serverGen) {
-        const serverCount = serverGen.live_gens + serverGen.waiting_gens;
+      if (activeGens.length > 0) {
+        const serverCount = activeGens.reduce((sum, g) => sum + g.live_gens + g.waiting_gens, 0);
 
         if (localCount === 0 && serverCount > 0) {
           // Server has active generations but we don't - enter reconnected mode
-          console.log(`[Generation] Sync: Server has ${serverCount} active, we have ${localCount}. Entering reconnected mode.`);
+          console.log(`[Generation] Sync: Server has ${serverCount} active across ${activeGens.length} requests, we have ${localCount}. Entering reconnected mode.`);
           set({
             isGenerating: true,
             isReconnected: true,
-            reconnectedGeneration: serverGen,
+            reconnectedGenerations: activeGens,
           });
           get().startPolling(sessionId);
         } else if (localCount > 0 && !isReconnected) {
@@ -414,7 +422,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
         console.log("[Generation] Sync: Server shows no active generations, clearing reconnected state");
         set({
           isReconnected: false,
-          reconnectedGeneration: null,
+          reconnectedGenerations: [],
         });
         get().stopPolling();
       }
@@ -427,21 +435,21 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     try {
       const response = await getActiveGenerations(sessionId);
       console.log("[Generation] GetActiveGenerations response:", response);
-      const activeGen = response.generations.find(g => g.live_gens > 0 || g.waiting_gens > 0);
+      const activeGens = response.generations.filter(g => g.live_gens > 0 || g.waiting_gens > 0);
 
-      if (activeGen) {
-        // Found active generation - we're in reconnected mode
-        console.log("[Generation] Reconnecting to active generation:", activeGen);
+      if (activeGens.length > 0) {
+        // Found active generations - we're in reconnected mode
+        console.log("[Generation] Reconnecting to active generations:", activeGens);
         set({
           isGenerating: true,
           isReconnected: true,
-          reconnectedGeneration: activeGen,
+          reconnectedGenerations: activeGens,
         });
       } else {
         // No active generations
         set({
           isReconnected: false,
-          reconnectedGeneration: null,
+          reconnectedGenerations: [],
         });
 
         // If batch is empty and we have a valid session start time, load session images
@@ -461,7 +469,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     // Stop any existing polling
     stopPolling();
 
-    console.log("[Generation] Starting polling for reconnected generation");
+    console.log("[Generation] Starting polling for reconnected generations");
 
     // Start new polling
     pollIntervalId = setInterval(async () => {
@@ -475,17 +483,17 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
 
       try {
         const response = await getActiveGenerations(sessionId);
-        const activeGen = response.generations.find(g => g.live_gens > 0 || g.waiting_gens > 0);
+        const activeGens = response.generations.filter(g => g.live_gens > 0 || g.waiting_gens > 0);
 
-        if (activeGen) {
+        if (activeGens.length > 0) {
           // Update progress
           set({
-            reconnectedGeneration: activeGen,
+            reconnectedGenerations: activeGens,
           });
         } else {
           // Generation complete - fetch recent images
-          const { reconnectedGeneration, batch } = get();
-          const generationStartTime = reconnectedGeneration?.start_time || 0;
+          const { reconnectedGenerations, batch } = get();
+          const generationStartTime = reconnectedGenerations[0]?.start_time || 0;
 
           try {
             // Fetch recent images sorted by date (newest first)
@@ -529,7 +537,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
           set({
             isGenerating: false,
             isReconnected: false,
-            reconnectedGeneration: null,
+            reconnectedGenerations: [],
           });
           stopPolling();
         }

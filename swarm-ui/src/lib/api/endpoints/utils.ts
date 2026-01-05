@@ -142,18 +142,21 @@ export async function fetchCivitaiMetadata(
     let file = (version.files as Array<Record<string, unknown>>)?.[0];
 
     if (versionId) {
-      for (const vers of modelVersions) {
-        const files = vers.files as Array<Record<string, unknown>>;
-        for (const f of files || []) {
-          if ((f.downloadUrl as string)?.endsWith(`/${versionId}`)) {
-            version = vers;
-            file = f;
-            break;
-          }
-        }
+      // Match by version ID (the modelVersionId from URL)
+      const foundVersion = modelVersions.find(v => String(v.id) === versionId);
+      if (foundVersion) {
+        version = foundVersion;
+        const files = version.files as Array<Record<string, unknown>>;
+        // Prefer safetensors file within this version
+        file = files?.find(f => {
+          const name = f.name as string;
+          return name?.endsWith(".safetensors") || name?.endsWith(".sft") || name?.endsWith(".gguf");
+        }) || files?.[0];
       }
-    } else {
-      // Prefer safetensors files
+    }
+
+    // If no specific version requested or not found, prefer safetensors files
+    if (!versionId || !file) {
       for (const vers of modelVersions) {
         const files = vers.files as Array<Record<string, unknown>>;
         for (const f of files || []) {
@@ -164,6 +167,7 @@ export async function fetchCivitaiMetadata(
             break;
           }
         }
+        if (file) break;
       }
     }
 
@@ -193,6 +197,29 @@ export async function fetchCivitaiMetadata(
 
     const creator = data.creator as Record<string, unknown> | undefined;
 
+    // Build available versions list for picker
+    const availableVersions = modelVersions.map(v => {
+      const files = v.files as Array<Record<string, unknown>>;
+      // Find the best file (prefer safetensors)
+      const bestFile = files?.find(f => {
+        const name = f.name as string;
+        return name?.endsWith(".safetensors") || name?.endsWith(".sft") || name?.endsWith(".gguf");
+      }) || files?.[0];
+
+      let versionDownloadUrl = bestFile?.downloadUrl as string || "";
+      if ((bestFile?.name as string)?.endsWith(".gguf")) {
+        versionDownloadUrl += "#.gguf";
+      }
+
+      return {
+        id: v.id as number,
+        name: v.name as string,
+        baseModel: v.baseModel as string | undefined,
+        downloadUrl: versionDownloadUrl,
+        fileName: bestFile?.name as string | undefined,
+      };
+    });
+
     return {
       modelId: parseInt(modelId),
       versionId: version.id as number,
@@ -206,6 +233,7 @@ export async function fetchCivitaiMetadata(
       previewImage: images?.[0]?.url as string | undefined,
       downloadUrl,
       modelType: typeMap[data.type as string] || undefined,
+      availableVersions,
     };
   } catch (error) {
     console.error("Failed to fetch Civitai metadata:", error);

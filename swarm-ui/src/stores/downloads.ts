@@ -18,6 +18,14 @@ export interface DownloadItem {
   startedAt: number;
 }
 
+export interface CivitaiVersionInfo {
+  id: number;
+  name: string;
+  baseModel?: string;
+  downloadUrl: string;
+  fileName?: string;
+}
+
 export interface CivitaiMetadata {
   modelId: number;
   versionId: number;
@@ -32,6 +40,7 @@ export interface CivitaiMetadata {
   previewImageBase64?: string; // Base64 data URI for embedding in model metadata
   downloadUrl: string;
   modelType?: string;
+  availableVersions?: CivitaiVersionInfo[]; // All available versions for picker
 }
 
 interface DownloadsState {

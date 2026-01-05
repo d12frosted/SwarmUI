@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import DOMPurify from "dompurify";
 import { useSessionStore } from "@/stores/session";
-import { useDownloadsStore, formatSpeed, formatBytes, formatElapsed, estimateTimeRemainingFromBytes, type CivitaiMetadata } from "@/stores/downloads";
+import { useDownloadsStore, formatSpeed, formatBytes, formatElapsed, estimateTimeRemainingFromBytes, type CivitaiMetadata, type CivitaiVersionInfo } from "@/stores/downloads";
 import { listModels, deleteModel, triggerRefresh } from "@/lib/api";
 import { parseCivitaiUrl, parseHuggingFaceUrl, fetchCivitaiMetadata, fetchImageAsBase64 } from "@/lib/api/endpoints/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -84,6 +84,7 @@ export function ModelManager() {
   const [downloadType, setDownloadType] = useState("Stable-Diffusion");
   const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
   const [previewMetadata, setPreviewMetadata] = useState<CivitaiMetadata | null>(null);
+  const [selectedVersion, setSelectedVersion] = useState<CivitaiVersionInfo | null>(null);
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
   const [pendingDownloadUrl, setPendingDownloadUrl] = useState("");
 
@@ -168,7 +169,10 @@ export function ModelManager() {
           const metadata = await fetchCivitaiMetadata(modelId, versionId, sessionId);
           if (metadata) {
             setPreviewMetadata(metadata);
-            setPendingDownloadUrl(url);
+            // Set the selected version from available versions
+            const currentVersion = metadata.availableVersions?.find(v => v.id === metadata.versionId);
+            setSelectedVersion(currentVersion || null);
+            setPendingDownloadUrl(metadata.downloadUrl);
             // Auto-detect type from metadata
             if (metadata.modelType) {
               setDownloadType(metadata.modelType);
@@ -230,6 +234,24 @@ export function ModelManager() {
   }, [sessionId, downloadName, downloadType, addDownload, startDownload]);
 
   const [isPreparingDownload, setIsPreparingDownload] = useState(false);
+
+  // Handle version change in preview dialog
+  const handleVersionChange = useCallback((versionId: string) => {
+    if (!previewMetadata?.availableVersions) return;
+
+    const newVersion = previewMetadata.availableVersions.find(v => String(v.id) === versionId);
+    if (newVersion) {
+      setSelectedVersion(newVersion);
+      setPendingDownloadUrl(newVersion.downloadUrl);
+      // Update suggested name to include version
+      const baseName = previewMetadata.title.split(" - ")[0];
+      const suggestedName = `${baseName} - ${newVersion.name}`
+        .replace(/[<>:"/\\|?*]/g, "")
+        .replace(/\s+/g, "_")
+        .substring(0, 50);
+      setDownloadName(suggestedName);
+    }
+  }, [previewMetadata]);
 
   const handleConfirmPreviewDownload = useCallback(async () => {
     if (!sessionId || !previewMetadata) return;
@@ -622,13 +644,35 @@ export function ModelManager() {
                       {previewMetadata.author}
                     </span>
                   )}
-                  {previewMetadata.baseModel && (
-                    <Badge variant="outline">{previewMetadata.baseModel}</Badge>
+                  {selectedVersion?.baseModel && (
+                    <Badge variant="outline">{selectedVersion.baseModel}</Badge>
                   )}
                   {previewMetadata.modelType && (
                     <Badge variant="secondary">{previewMetadata.modelType}</Badge>
                   )}
                 </div>
+
+                {/* Version Picker */}
+                {previewMetadata.availableVersions && previewMetadata.availableVersions.length > 1 && (
+                  <div className="space-y-1.5">
+                    <Label>Version</Label>
+                    <Select
+                      value={selectedVersion ? String(selectedVersion.id) : ""}
+                      onValueChange={handleVersionChange}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select version" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {previewMetadata.availableVersions.map((v) => (
+                          <SelectItem key={v.id} value={String(v.id)}>
+                            {v.name} {v.baseModel && `(${v.baseModel})`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 {/* Trigger Words */}
                 {previewMetadata.triggerWords && previewMetadata.triggerWords.length > 0 && (
